@@ -1,0 +1,1715 @@
+ARGS
+<!(--outdir/-o)outdir>
+<(--stage)stage>
+  plan
+<(--profile)profile>
+  standard
+<(--reads-per-sample)reads-per-sample>
+  500000
+<(--seed)seed>
+  20260522
+<(--threads/-t)threads>
+  4
+<(--limit-samples)limit-samples>
+  0
+<(--force)force>
+  false
+<(--resume)resume>
+  false
+<(--keep-lanes)keep-lanes>
+  false
+
+RUN
+<taffish>
+if false; then
+    [[taf: taf-seqkit-v2.13.0-r2 seqkit version]]
+    [[taf: taf-sra-tools-v3.4.1-r1 sra-info --version]]
+fi
+
+<shell>
+set -eu
+
+APP_NAME="rnaseq-yeast-get-data"
+APP_VERSION="0.1.0-r1"
+PROJECT_ACCESSION="PRJEB5348"
+AUTHOR_COMMIT="375dc0d57d9d1fa96a4245a6530e0fda34305891"
+
+OUTDIR="::outdir::"
+STAGE="::stage::"
+PROFILE="::profile::"
+READS_PER_SAMPLE="::reads-per-sample::"
+SEED="::seed::"
+THREADS="::threads::"
+LIMIT_SAMPLES="::limit-samples::"
+FORCE="::force::"
+RESUME="::resume::"
+KEEP_LANES="::keep-lanes::"
+
+SEQKIT_CMD="taf-seqkit-v2.13.0-r2"
+SRA_CMD="taf-sra-tools-v3.4.1-r1"
+
+ENA_REPORT_URL="https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJEB5348&result=read_run&fields=run_accession,experiment_accession,sample_accession,secondary_sample_accession,study_accession,secondary_study_accession,scientific_name,library_strategy,library_source,library_selection,library_layout,instrument_platform,instrument_model,experiment_title,sample_title,nominal_length,read_count,base_count,fastq_ftp,fastq_md5,fastq_bytes&format=tsv&download=true"
+PROFDGE_BASE_URL="https://raw.githubusercontent.com/bartongroup/profDGE48/${AUTHOR_COMMIT}"
+AUTHOR_MAPPING_URL="${PROFDGE_BASE_URL}/Preprocessed_data/ENAdata_ERP004763_sample_mapping.tsv"
+AUTHOR_BAD_REPS_URL="${PROFDGE_BASE_URL}/Bad_replicate_identification/exclude.lst"
+WT_COUNTS_URL="${PROFDGE_BASE_URL}/Preprocessed_data/WT_countdata.tar.gz"
+SNF2_COUNTS_URL="${PROFDGE_BASE_URL}/Preprocessed_data/Snf2_countdata.tar.gz"
+SGD_REFERENCE_RELEASE="R64.4.1"
+SGD_REFERENCE_ARCHIVE_DATE="2023-08-30"
+SGD_REFERENCE_TARBALL_URL="http://sgd-archive.yeastgenome.org/sequence/S288C_reference/genome_releases/S288C_reference_genome_R64-4-1_20230830.tgz"
+SGD_REFERENCE_TARBALL_NAME="S288C_reference_genome_R64-4-1_20230830.tgz"
+SGD_REFERENCE_RAW_GENOME_MEMBER="S288C_reference_sequence_R64-4-1_20230830.fsa.gz"
+SGD_REFERENCE_ANNOTATION_MEMBER="saccharomyces_cerevisiae_R64-4-1_20230830.gff.gz"
+GO_BASIC_OBO_URL="https://current.geneontology.org/ontology/go-basic.obo"
+GO_BASIC_OBO_NAME="go-basic.obo"
+
+INPUTS="${OUTDIR}/00_inputs"
+LOGS="${OUTDIR}/01_logs"
+STEP_LOGS="${LOGS}/steps"
+INTERMEDIATE="${OUTDIR}/02_intermediate"
+RESULTS="${OUTDIR}/03_results"
+REPORTS="${OUTDIR}/04_reports"
+
+METADATA_DIR="${INTERMEDIATE}/metadata"
+CACHE_DIR="${INTERMEDIATE}/cache"
+COUNT_UNPACK_DIR="${INTERMEDIATE}/counts_unpacked"
+TMP_DIR="${INTERMEDIATE}/tmp"
+
+FASTQ_PKG="${RESULTS}/yeast-snf2-fastq-mini-v1"
+COUNT_PKG="${RESULTS}/yeast-snf2-counts-medium-v1"
+REF_PKG="${RESULTS}/yeast-reference-sgd-r64.4.1-v1"
+GENESETS_PKG="${RESULTS}/yeast-sgd-go-gene-sets-r64.4.1-v1"
+REF_SOURCE_DIR="${REF_PKG}/source"
+REF_GENOME_DIR="${REF_PKG}/reference/genome"
+REF_ANNOTATION_DIR="${REF_PKG}/reference/annotation"
+GENESETS_SOURCE_DIR="${GENESETS_PKG}/source"
+GENESETS_DIR="${GENESETS_PKG}/gene_sets"
+GENESETS_BACKGROUND_DIR="${GENESETS_PKG}/background"
+GENESETS_METADATA_DIR="${GENESETS_PKG}/metadata"
+
+SELECTION_TSV="${INPUTS}/selected_replicates.tsv"
+URLS_TSV="${INPUTS}/source_urls.tsv"
+ENA_REPORT_TSV="${METADATA_DIR}/ena_PRJEB5348_read_run.tsv"
+AUTHOR_MAPPING_TSV="${METADATA_DIR}/ENAdata_ERP004763_sample_mapping.tsv"
+AUTHOR_BAD_REPS="${METADATA_DIR}/exclude.lst"
+SOURCE_ACCESSIONS_TSV="${FASTQ_PKG}/source_accessions.tsv"
+FASTQ_SAMPLES_TSV="${FASTQ_PKG}/samples.tsv"
+FASTQ_GENERATED_SAMPLES_TSV="${FASTQ_PKG}/generated_samples.tsv"
+FASTQ_METADATA_TSV="${FASTQ_PKG}/metadata.tsv"
+FASTQ_STATS_TSV="${FASTQ_PKG}/expected/fastq_stats.tsv"
+COUNT_SOURCE_TSV="${COUNT_PKG}/source_files.tsv"
+COUNT_FILE_MAP_TSV="${COUNT_PKG}/source/count_file_map.tsv"
+SELECTED_COUNT_FILES_TSV="${COUNT_PKG}/source/selected_count_files.tsv"
+GENE_COUNTS_TSV="${COUNT_PKG}/counts/gene_counts_12v12.tsv"
+REF_TARBALL="${REF_SOURCE_DIR}/${SGD_REFERENCE_TARBALL_NAME}"
+REF_GENOME_FA="${REF_GENOME_DIR}/yeast_s288c_reference_genome_R64-4-1.fa"
+REF_GENOME_FAI="${REF_GENOME_FA}.fai"
+REF_ANNOTATION_GFF3="${REF_ANNOTATION_DIR}/yeast_s288c_gene_annotation_R64-4-1.gff3"
+REF_SOURCE_TSV="${REF_PKG}/source_files.tsv"
+REF_SUMMARY_TSV="${REF_PKG}/reference_summary.tsv"
+REF_MANIFEST_JSON="${REF_PKG}/manifest.json"
+REF_README_MD="${REF_PKG}/README.md"
+GO_BASIC_OBO="${GENESETS_SOURCE_DIR}/${GO_BASIC_OBO_NAME}"
+GENESETS_GO_TERMS_TSV="${GENESETS_METADATA_DIR}/go_terms.tsv"
+GENESETS_GENE_GO_TERMS_TSV="${GENESETS_METADATA_DIR}/gene_go_terms.tsv"
+GENESETS_INDEX_TSV="${GENESETS_METADATA_DIR}/gene_set_index.tsv"
+GENESETS_BACKGROUND_TSV="${GENESETS_BACKGROUND_DIR}/yeast_background_genes.tsv"
+GENESETS_GO_BP_GMT="${GENESETS_DIR}/sgd_go_bp.gmt"
+GENESETS_GO_MF_GMT="${GENESETS_DIR}/sgd_go_mf.gmt"
+GENESETS_GO_CC_GMT="${GENESETS_DIR}/sgd_go_cc.gmt"
+GENESETS_GO_ALL_GMT="${GENESETS_DIR}/sgd_go_all.gmt"
+GENESETS_SOURCE_TSV="${GENESETS_PKG}/source_files.tsv"
+GENESETS_SUMMARY_TSV="${GENESETS_PKG}/gene_sets_summary.tsv"
+GENESETS_MANIFEST_JSON="${GENESETS_PKG}/manifest.json"
+GENESETS_README_MD="${GENESETS_PKG}/README.md"
+COMMANDS_SH="${REPORTS}/commands.sh"
+VERSIONS_TSV="${REPORTS}/versions.tsv"
+METHODS_TXT="${REPORTS}/methods.txt"
+FLOW_SUMMARY_TSV="${REPORTS}/flow_summary.tsv"
+MANIFEST_JSON="${OUTDIR}/run.manifest.json"
+
+die() {
+    printf '%s\n' "ERROR: $*" >&2
+    exit 1
+}
+
+log() {
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "${LOGS}/flow.log"
+}
+
+stage_begin() {
+    log ""
+    log "==> BEGIN stage: $1"
+}
+
+stage_done() {
+    log "==> DONE stage: $1"
+}
+
+require_positive_int() {
+    name="$1"
+    value="$2"
+    case "$value" in
+        ''|*[!0-9]*) die "${name} must be a non-negative integer" ;;
+    esac
+}
+
+bool_is_valid() {
+    case "$1" in
+        true|false) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+md5_file() {
+    if command -v md5sum >/dev/null 2>&1; then
+        md5sum "$1" | awk '{print $1}'
+    elif command -v md5 >/dev/null 2>&1; then
+        md5 -q "$1"
+    else
+        die "Neither md5sum nor md5 is available"
+    fi
+}
+
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    else
+        die "Neither sha256sum nor shasum is available"
+    fi
+}
+
+write_fasta_fai() {
+    fasta="$1"
+    fai="$2"
+    tmp="${fai}.tmp"
+    rm -f "$tmp"
+    awk '
+        function flush_record() {
+            if (name != "") {
+                print name "\t" seqlen "\t" seq_offset "\t" line_bases "\t" line_width
+            }
+        }
+        BEGIN {
+            offset = 0
+            name = ""
+        }
+        /^>/ {
+            flush_record()
+            header = substr($0, 2)
+            split(header, fields, /[ \t]+/)
+            name = fields[1]
+            seqlen = 0
+            line_bases = 0
+            line_width = 0
+            seq_offset = offset + length($0) + 1
+            offset += length($0) + 1
+            next
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            bases = length(line)
+            if (name != "" && bases > 0) {
+                if (line_bases == 0) {
+                    line_bases = bases
+                    line_width = length($0) + 1
+                }
+                seqlen += bases
+            }
+            offset += length($0) + 1
+        }
+        END {
+            flush_record()
+        }
+    ' "$fasta" > "$tmp"
+    [ -s "$tmp" ] || die "Failed to generate FASTA index: ${fai}"
+    mv "$tmp" "$fai"
+}
+
+file_size_bytes() {
+    if [ -f "$1" ]; then
+        wc -c < "$1" | awk '{print $1}'
+    else
+        printf '0\n'
+    fi
+}
+
+format_bytes() {
+    awk -v b="$1" 'BEGIN {
+        if (b == "" || b == ".") {
+            print "unknown"
+        } else if (b < 1024) {
+            printf "%d B", b
+        } else if (b < 1024 * 1024) {
+            printf "%.1f KB", b / 1024
+        } else if (b < 1024 * 1024 * 1024) {
+            printf "%.1f MB", b / 1024 / 1024
+        } else {
+            printf "%.2f GB", b / 1024 / 1024 / 1024
+        }
+    }'
+}
+
+tsv_records() {
+    awk 'NR > 1 { n++ } END { print n + 0 }' "$1"
+}
+
+tsv_unique_first_col() {
+    awk 'NR > 1 && !seen[$1]++ { n++ } END { print n + 0 }' "$1"
+}
+
+record_cmd() {
+    printf '%s\n' "$*" >> "$COMMANDS_SH"
+}
+
+ensure_layout() {
+    case "$STAGE" in
+        plan|metadata|counts|reference|genesets|fastq|all) ;;
+        *) die "--stage must be one of: plan, metadata, counts, reference, genesets, fastq, all" ;;
+    esac
+
+    case "$PROFILE" in
+        standard|lite) ;;
+        *) die "--profile must be one of: standard, lite" ;;
+    esac
+
+    bool_is_valid "$FORCE" || die "--force must be true or false"
+    bool_is_valid "$RESUME" || die "--resume must be true or false"
+    bool_is_valid "$KEEP_LANES" || die "--keep-lanes must be true or false"
+
+    require_positive_int "--reads-per-sample" "$READS_PER_SAMPLE"
+    require_positive_int "--seed" "$SEED"
+    require_positive_int "--threads" "$THREADS"
+    require_positive_int "--limit-samples" "$LIMIT_SAMPLES"
+
+    [ "$READS_PER_SAMPLE" -gt 0 ] || die "--reads-per-sample must be > 0"
+    [ "$THREADS" -gt 0 ] || die "--threads must be > 0"
+
+    if [ -e "$OUTDIR" ] && [ "$FORCE" != "true" ] && [ "$RESUME" != "true" ]; then
+        die "Output directory already exists: ${OUTDIR}. To continue a previous plan/metadata/counts/reference/fastq run, add --resume true. To redownload/overwrite existing files, add --force true."
+    fi
+
+    mkdir -p "$INPUTS" "$STEP_LOGS" "$METADATA_DIR" "$CACHE_DIR" "$COUNT_UNPACK_DIR" "$TMP_DIR"
+    mkdir -p "$FASTQ_PKG/reads" "$FASTQ_PKG/expected" "$COUNT_PKG/source" "$COUNT_PKG/counts"
+    mkdir -p "$REF_SOURCE_DIR" "$REF_GENOME_DIR" "$REF_ANNOTATION_DIR" "$REPORTS"
+    mkdir -p "$GENESETS_SOURCE_DIR" "$GENESETS_DIR" "$GENESETS_BACKGROUND_DIR" "$GENESETS_METADATA_DIR"
+
+    {
+        printf '%s\n' '#!/bin/sh'
+        printf '%s\n' 'set -eu'
+        printf '%s\n' ''
+        printf '# Commands executed during this invocation: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+        printf '%s\n' ''
+    } > "$COMMANDS_SH"
+    chmod +x "$COMMANDS_SH"
+}
+
+write_static_inputs() {
+    cat > "$SELECTION_TSV" <<'EOF'
+condition_key	source_condition	source_biol_rep	selected_order	sample_id	output_condition
+WT	WT	1	1	WT_01	WT
+WT	WT	5	2	WT_02	WT
+WT	WT	9	3	WT_03	WT
+WT	WT	13	4	WT_04	WT
+WT	WT	17	5	WT_05	WT
+WT	WT	24	6	WT_06	WT
+WT	WT	29	7	WT_07	WT
+WT	WT	32	8	WT_08	WT
+WT	WT	37	9	WT_09	WT
+WT	WT	40	10	WT_10	WT
+WT	WT	44	11	WT_11	WT
+WT	WT	48	12	WT_12	WT
+SNF2	SNF2	1	1	SNF2KO_01	snf2_KO
+SNF2	SNF2	5	2	SNF2KO_02	snf2_KO
+SNF2	SNF2	9	3	SNF2KO_03	snf2_KO
+SNF2	SNF2	14	4	SNF2KO_04	snf2_KO
+SNF2	SNF2	18	5	SNF2KO_05	snf2_KO
+SNF2	SNF2	22	6	SNF2KO_06	snf2_KO
+SNF2	SNF2	26	7	SNF2KO_07	snf2_KO
+SNF2	SNF2	30	8	SNF2KO_08	snf2_KO
+SNF2	SNF2	34	9	SNF2KO_09	snf2_KO
+SNF2	SNF2	38	10	SNF2KO_10	snf2_KO
+SNF2	SNF2	42	11	SNF2KO_11	snf2_KO
+SNF2	SNF2	46	12	SNF2KO_12	snf2_KO
+EOF
+
+    cat > "$URLS_TSV" <<EOF
+label	url	note
+ena_read_run	${ENA_REPORT_URL}	ENA run table for ${PROJECT_ACCESSION}
+author_mapping	${AUTHOR_MAPPING_URL}	Author mapping from ENA run accession to biological replicate
+author_bad_reps	${AUTHOR_BAD_REPS_URL}	Author excluded replicate list
+wt_counts	${WT_COUNTS_URL}	Author WT count tarball
+snf2_counts	${SNF2_COUNTS_URL}	Author Snf2 count tarball
+sgd_reference_tarball	${SGD_REFERENCE_TARBALL_URL}	SGD S288C ${SGD_REFERENCE_RELEASE} genome and annotation tarball
+go_basic_obo	${GO_BASIC_OBO_URL}	Gene Ontology go-basic OBO for GO namespace and term names
+EOF
+}
+
+write_versions() {
+    {
+        printf 'component\tversion\n'
+        printf '%s\t%s\n' "$APP_NAME" "$APP_VERSION"
+        printf 'project_accession\t%s\n' "$PROJECT_ACCESSION"
+        printf 'profDGE48_commit\t%s\n' "$AUTHOR_COMMIT"
+        printf 'sgd_reference_release\t%s\n' "$SGD_REFERENCE_RELEASE"
+        printf 'sgd_reference_archive_date\t%s\n' "$SGD_REFERENCE_ARCHIVE_DATE"
+        printf 'taf-seqkit\t2.13.0-r2\n'
+        printf 'taf-sra-tools\t3.4.1-r1\n'
+        if command -v curl >/dev/null 2>&1; then
+            printf 'curl\t%s\n' "$(curl --version | awk 'NR==1{print $1" "$2}')"
+        else
+            printf 'curl\tmissing\n'
+        fi
+        if command -v tar >/dev/null 2>&1; then
+            printf 'tar\tavailable\n'
+        else
+            printf 'tar\tmissing\n'
+        fi
+        if command -v gzip >/dev/null 2>&1; then
+            printf 'gzip\tavailable\n'
+        else
+            printf 'gzip\tmissing\n'
+        fi
+    } > "$VERSIONS_TSV"
+}
+
+write_methods() {
+    cat > "$METHODS_TXT" <<EOF
+This data-preparation flow builds the TAFFISH RNA-seq yeast SNF2 formal test dataset.
+
+Dataset source:
+  ENA project ${PROJECT_ACCESSION}, yeast WT versus snf2 knockout RNA-seq.
+  Author mapping/count files are pinned to bartongroup/profDGE48 commit ${AUTHOR_COMMIT}.
+
+Selected biological samples:
+  12 WT and 12 snf2 knockout biological replicates are selected from the author mapping.
+  The selected replicate numbers avoid the author-listed bad replicates.
+  Each biological replicate is represented by its ENA lane/run records and sampled after lane merging.
+
+FASTQ package:
+  For each selected biological sample, all matching ENA lane FASTQ files are downloaded and md5-checked.
+  Lane FASTQs are merged per biological sample inside the output directory.
+  SeqKit samples ${READS_PER_SAMPLE} reads with seed ${SEED}.
+
+Count package:
+  Author-provided WT and Snf2 count tarballs are downloaded from the pinned commit.
+  Count files are mapped to the selected biological replicates and combined into a 12-vs-12 gene count matrix.
+
+Reference package:
+  The SGD S288C reference genome release ${SGD_REFERENCE_RELEASE} archive is downloaded from the SGD archive.
+  The flow extracts an uncompressed feature-only gene annotation GFF3 for rnaseq-index-flow formal tests.
+  The genome FASTA is extracted from the GFF3 embedded FASTA block, not the raw RefSeq-style FASTA member,
+  so FASTA sequence IDs match GFF3 seqids such as chrI, chrII and chrmt.
+
+GO gene-set package:
+  The feature-only SGD annotation GFF3 is used to map yeast systematic gene IDs to GO terms.
+  The Gene Ontology go-basic OBO file is used to assign GO term names and namespaces.
+  The final GMT files keep the same systematic gene ID style as the count matrix and DE outputs.
+  Root GO terms and Sequence Ontology terms are excluded from GMT construction.
+  This r1 package uses GO terms directly present in SGD GFF3 Ontology_term attributes;
+  it does not propagate annotations to GO ancestor terms.
+  The background gene list is derived from the selected count matrix when it is available,
+  excluding non-gene summary rows such as ambiguous or alignment_not_unique.
+
+Important boundary:
+  This flow is a data preparation helper and intentionally performs network downloads when stage metadata,
+  counts, reference, genesets, fastq, or all is requested. Analysis flows should consume the prepared local outputs and should
+  not download data at normal runtime.
+EOF
+}
+
+write_plan_report() {
+    cat > "${REPORTS}/download-plan.md" <<EOF
+# RNA-seq yeast test data download plan
+
+This file is written by ${APP_NAME} ${APP_VERSION}.
+
+Default behavior:
+
+- The default stage is \`plan\`, which writes this plan and static sample selection only.
+- No large FASTQ, count or reference data is downloaded unless \`--stage metadata\`, \`--stage counts\`, \`--stage reference\`, \`--stage fastq\`, or \`--stage all\` is requested.
+
+Planned packages:
+
+1. \`yeast-snf2-fastq-mini-v1\`
+   - 12 WT + 12 snf2 knockout biological samples.
+   - ${READS_PER_SAMPLE} reads per biological sample.
+   - Single-end FASTQ.
+   - ENA lane FASTQs are merged by biological replicate before sampling.
+
+2. \`yeast-snf2-counts-medium-v1\`
+   - Author-derived gene count files from the same project.
+   - Matrix columns follow the same 12+12 biological sample IDs.
+   - Intended for DE, enrichment, report, and later coexpression testing.
+
+3. \`yeast-reference-sgd-r64.4.1-v1\`
+   - SGD S288C reference genome release ${SGD_REFERENCE_RELEASE}.
+   - Uncompressed genome FASTA extracted from the GFF3 embedded FASTA block, with chr-style seqids matching the annotation.
+   - Uncompressed feature-only gene annotation GFF3 for transcript extraction and gene counting routes.
+
+4. \`yeast-sgd-go-gene-sets-r64.4.1-v1\`
+   - SGD GFF3-derived GO gene sets in standard GMT format.
+   - GO Biological Process, Molecular Function, Cellular Component and combined GMT files.
+   - Background gene list derived from the selected 12-vs-12 count matrix when available.
+
+Selected WT replicates:
+
+\`1, 5, 9, 13, 17, 24, 29, 32, 37, 40, 44, 48\`
+
+Selected snf2 knockout replicates:
+
+\`1, 5, 9, 14, 18, 22, 26, 30, 34, 38, 42, 46\`
+
+Recommended first real run:
+
+\`\`\`sh
+taf-rnaseq-yeast-get-data \\
+  --outdir yeast-snf2-data-v1 \\
+  --stage metadata \\
+  --resume true
+\`\`\`
+
+Recommended small network trial:
+
+\`\`\`sh
+taf-rnaseq-yeast-get-data \\
+  --outdir yeast-snf2-data-v1 \\
+  --stage fastq \\
+  --resume true \\
+  --limit-samples 1
+\`\`\`
+
+Recommended full run after review:
+
+\`\`\`sh
+taf-rnaseq-yeast-get-data \\
+  --outdir yeast-snf2-data-v1 \\
+  --stage all \\
+  --resume true
+\`\`\`
+
+Reference-only preparation:
+
+\`\`\`sh
+taf-rnaseq-yeast-get-data \\
+  --outdir yeast-snf2-data-v1 \\
+  --stage reference \\
+  --resume true
+\`\`\`
+
+GO gene-set preparation:
+
+\`\`\`sh
+taf-rnaseq-yeast-get-data \\
+  --outdir yeast-snf2-data-v1 \\
+  --stage genesets \\
+  --resume true
+\`\`\`
+EOF
+}
+
+write_manifest() {
+    created_utc="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    cat > "$MANIFEST_JSON" <<EOF
+{
+  "app": "${APP_NAME}",
+  "version": "${APP_VERSION}",
+  "created_utc": "${created_utc}",
+  "stage": "${STAGE}",
+  "profile": "${PROFILE}",
+  "parameters": {
+    "reads_per_sample": ${READS_PER_SAMPLE},
+    "seed": ${SEED},
+    "threads": ${THREADS},
+    "limit_samples": ${LIMIT_SAMPLES},
+    "force": ${FORCE},
+    "resume": ${RESUME},
+    "keep_lanes": ${KEEP_LANES}
+  },
+  "sources": {
+    "ena_project": "${PROJECT_ACCESSION}",
+    "profDGE48_commit": "${AUTHOR_COMMIT}",
+    "sgd_reference_release": "${SGD_REFERENCE_RELEASE}",
+    "sgd_reference_archive_date": "${SGD_REFERENCE_ARCHIVE_DATE}",
+    "sgd_reference_tarball": "${SGD_REFERENCE_TARBALL_URL}",
+    "go_basic_obo": "${GO_BASIC_OBO_URL}"
+  },
+  "outputs": {
+    "fastq_package": "03_results/yeast-snf2-fastq-mini-v1",
+    "count_package": "03_results/yeast-snf2-counts-medium-v1",
+    "reference_package": "03_results/yeast-reference-sgd-r64.4.1-v1",
+    "gene_set_package": "03_results/yeast-sgd-go-gene-sets-r64.4.1-v1"
+  }
+}
+EOF
+}
+
+write_flow_summary() {
+    selected_samples="$(awk 'NR>1{n++} END{print n+0}' "$SELECTION_TSV")"
+    lane_records=0
+    if [ -f "$SOURCE_ACCESSIONS_TSV" ]; then
+        lane_records="$(awk 'NR>1{n++} END{print n+0}' "$SOURCE_ACCESSIONS_TSV")"
+    fi
+    fastq_files=0
+    if [ -d "${FASTQ_PKG}/reads" ]; then
+        fastq_files="$(find "${FASTQ_PKG}/reads" -type f -name '*.fq.gz' | wc -l | awk '{print $1}')"
+    fi
+    count_matrix="missing"
+    if [ -s "$GENE_COUNTS_TSV" ]; then
+        count_matrix="present"
+    fi
+    reference_genome="missing"
+    if [ -s "$REF_GENOME_FA" ]; then
+        reference_genome="present"
+    fi
+    reference_annotation="missing"
+    if [ -s "$REF_ANNOTATION_GFF3" ]; then
+        reference_annotation="present"
+    fi
+    gene_sets="missing"
+    if [ -s "$GENESETS_GO_ALL_GMT" ] && [ -s "$GENESETS_BACKGROUND_TSV" ]; then
+        gene_sets="present"
+    fi
+    {
+        printf 'metric\tvalue\n'
+        printf 'app\t%s\n' "$APP_NAME"
+        printf 'version\t%s\n' "$APP_VERSION"
+        printf 'stage\t%s\n' "$STAGE"
+        printf 'profile\t%s\n' "$PROFILE"
+        printf 'selected_biological_samples\t%s\n' "$selected_samples"
+        printf 'selected_lane_records\t%s\n' "$lane_records"
+        printf 'fastq_files_generated\t%s\n' "$fastq_files"
+        printf 'reads_per_sample\t%s\n' "$READS_PER_SAMPLE"
+        printf 'count_matrix\t%s\n' "$count_matrix"
+        printf 'reference_genome\t%s\n' "$reference_genome"
+        printf 'reference_annotation\t%s\n' "$reference_annotation"
+        printf 'gene_sets\t%s\n' "$gene_sets"
+    } > "$FLOW_SUMMARY_TSV"
+}
+
+download_file() {
+    url="$1"
+    dest="$2"
+    label="$3"
+    expected_bytes="${4:-}"
+    mkdir -p "$(dirname "$dest")"
+
+    if [ -s "$dest" ] && [ "$FORCE" != "true" ]; then
+        size="$(file_size_bytes "$dest")"
+        if [ -n "$expected_bytes" ] && [ "$expected_bytes" != "." ] && [ "$size" != "$expected_bytes" ]; then
+            log "Existing ${label} has unexpected size, will redownload: ${dest} ($(format_bytes "$size"), expected $(format_bytes "$expected_bytes"))"
+            rm -f "$dest"
+        else
+            log "Reuse existing ${label}: ${dest} ($(format_bytes "$size"))"
+            return 0
+        fi
+    fi
+
+    tmp="${dest}.tmp"
+    if [ "$FORCE" = "true" ]; then
+        rm -f "$tmp"
+    elif [ -e "$tmp" ] && [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+    elif [ -s "$tmp" ] && [ -n "$expected_bytes" ] && [ "$expected_bytes" != "." ]; then
+        tmp_size="$(file_size_bytes "$tmp")"
+        if [ "$tmp_size" = "$expected_bytes" ]; then
+            log "Found complete temporary download for ${label}, promoting to final path: ${tmp} ($(format_bytes "$tmp_size"))"
+            mv "$tmp" "$dest"
+            return 0
+        fi
+    fi
+
+    curl_retry_args=""
+    if curl --help all 2>/dev/null | grep -q -- '--retry-all-errors'; then
+        curl_retry_args="${curl_retry_args} --retry-all-errors"
+    fi
+    if curl --help all 2>/dev/null | grep -q -- '--retry-connrefused'; then
+        curl_retry_args="${curl_retry_args} --retry-connrefused"
+    fi
+
+    curl_continue_args=""
+    if [ -s "$tmp" ]; then
+        curl_continue_args="-C -"
+        log "Resume partial download for ${label}: ${tmp} ($(format_bytes "$(file_size_bytes "$tmp")"))"
+    fi
+
+    if [ -n "$expected_bytes" ] && [ "$expected_bytes" != "." ]; then
+        log "Download ${label}: expected $(format_bytes "$expected_bytes")"
+    else
+        log "Download ${label}: size unknown"
+    fi
+    log "  URL: ${url}"
+    log "  -> ${dest}"
+    record_cmd "curl -L --fail --retry 10 --retry-delay 10 --connect-timeout 30 --speed-time 120 --speed-limit 1024 -C - --progress-bar -o '$dest' '$url'"
+    curl -L --fail --retry 10 --retry-delay 10 --connect-timeout 30 --speed-time 120 --speed-limit 1024 $curl_retry_args $curl_continue_args --progress-bar -o "$tmp" "$url" 2>&1 < /dev/null
+    mv "$tmp" "$dest"
+    size="$(file_size_bytes "$dest")"
+    log "Download complete: ${label} ($(format_bytes "$size"))"
+}
+
+metadata_stage() {
+    stage_begin "metadata"
+    log "Download small project metadata and build selected source accession tables"
+    download_file "$ENA_REPORT_URL" "$ENA_REPORT_TSV" "ENA run table"
+    download_file "$AUTHOR_MAPPING_URL" "$AUTHOR_MAPPING_TSV" "author ENA mapping"
+    download_file "$AUTHOR_BAD_REPS_URL" "$AUTHOR_BAD_REPS" "author bad replicate list"
+    generate_source_accessions
+    validate_source_accessions
+    generate_fastq_tables
+    log "Metadata table: $(tsv_records "$SOURCE_ACCESSIONS_TSV") selected ENA lane records from $(tsv_unique_first_col "$SOURCE_ACCESSIONS_TSV") biological samples"
+    stage_done "metadata"
+}
+
+generate_source_accessions() {
+    log "Build selected ENA source accession table: ${SOURCE_ACCESSIONS_TSV}"
+    awk -v sel="$SELECTION_TSV" -v map="$AUTHOR_MAPPING_TSV" -v ena="$ENA_REPORT_TSV" '
+        BEGIN { FS = OFS = "\t" }
+        FILENAME == sel && FNR > 1 {
+            key = $2 "\t" ($3 + 0)
+            desired[key] = $5 OFS $6 OFS $4
+            next
+        }
+        FILENAME == map && FNR > 1 {
+            key = $3 "\t" ($4 + 0)
+            if (key in desired) {
+                split(desired[key], d, OFS)
+                run_meta[$1] = d[1] OFS d[2] OFS $3 OFS ($4 + 0) OFS d[3] OFS $2
+            }
+            next
+        }
+        FILENAME == ena && FNR == 1 {
+            for (i = 1; i <= NF; i++) {
+                h[$i] = i
+            }
+            print "sample_id", "condition", "source_condition", "source_biol_rep", "selected_order", "lane", "run_accession", "fastq_url", "fastq_md5", "fastq_bytes"
+            next
+        }
+        FILENAME == ena && FNR > 1 {
+            run = $h["run_accession"]
+            if (!(run in run_meta)) {
+                next
+            }
+            split(run_meta[run], m, OFS)
+            url = $h["fastq_ftp"]
+            md5 = $h["fastq_md5"]
+            bytes = $h["fastq_bytes"]
+            split(url, url_parts, ";")
+            split(md5, md5_parts, ";")
+            split(bytes, bytes_parts, ";")
+            url = url_parts[1]
+            md5 = md5_parts[1]
+            bytes = bytes_parts[1]
+            if (url !~ /^https?:\/\//) {
+                url = "https://" url
+            }
+            print m[1], m[2], m[3], m[4], m[5], m[6], run, url, md5, bytes
+        }
+    ' "$SELECTION_TSV" "$AUTHOR_MAPPING_TSV" "$ENA_REPORT_TSV" > "${SOURCE_ACCESSIONS_TSV}.tmp"
+
+    tab="$(printf '\t')"
+    {
+        head -n 1 "${SOURCE_ACCESSIONS_TSV}.tmp"
+        tail -n +2 "${SOURCE_ACCESSIONS_TSV}.tmp" | sort -t "$tab" -k2,2 -k5,5n -k6,6n -k7,7
+    } > "$SOURCE_ACCESSIONS_TSV"
+    rm -f "${SOURCE_ACCESSIONS_TSV}.tmp"
+}
+
+validate_source_accessions() {
+    selected_samples="$(tsv_records "$SELECTION_TSV")"
+    actual_samples="$(tsv_unique_first_col "$SOURCE_ACCESSIONS_TSV")"
+    actual_lanes="$(tsv_records "$SOURCE_ACCESSIONS_TSV")"
+    expected_lanes=$((selected_samples * 7))
+
+    if [ "$actual_samples" != "$selected_samples" ] || [ "$actual_lanes" != "$expected_lanes" ]; then
+        log "Selected sample/lane check failed"
+        log "  expected samples: ${selected_samples}"
+        log "  actual samples  : ${actual_samples}"
+        log "  expected lanes  : ${expected_lanes}"
+        log "  actual lanes    : ${actual_lanes}"
+        die "Metadata source accession table is incomplete. Check source_condition values and ENA/author mapping files."
+    fi
+}
+
+generate_fastq_tables() {
+    log "Build FASTQ package sample and metadata tables"
+    awk '
+        BEGIN { FS = OFS = "\t" }
+        NR == 1 {
+            print "sample_id", "read1", "condition", "library_layout", "source_biological_replicate"
+            next
+        }
+        !seen[$1]++ {
+            print $1, "reads/" $1 ".fq.gz", $2, "single-end", $4
+        }
+    ' "$SOURCE_ACCESSIONS_TSV" > "$FASTQ_SAMPLES_TSV"
+
+    awk '
+        BEGIN { FS = OFS = "\t" }
+        NR == 1 {
+            print "sample", "condition", "batch", "source_biological_replicate", "source_project"
+            next
+        }
+        !seen[$1]++ {
+            print $1, $2, "batch1", $4, "PRJEB5348"
+        }
+    ' "$SOURCE_ACCESSIONS_TSV" > "$FASTQ_METADATA_TSV"
+}
+
+counts_stage() {
+    stage_begin "counts"
+    log "Download author count tarballs and build selected 12-vs-12 count matrix"
+    download_file "$WT_COUNTS_URL" "${COUNT_PKG}/source/WT_countdata.tar.gz" "WT count tarball"
+    download_file "$SNF2_COUNTS_URL" "${COUNT_PKG}/source/Snf2_countdata.tar.gz" "Snf2 count tarball"
+    if [ ! -f "$AUTHOR_BAD_REPS" ]; then
+        download_file "$AUTHOR_BAD_REPS_URL" "$AUTHOR_BAD_REPS" "author bad replicate list"
+    fi
+
+    {
+        printf 'file\turl\tsha256\n'
+        for f in "${COUNT_PKG}/source/WT_countdata.tar.gz" "${COUNT_PKG}/source/Snf2_countdata.tar.gz" "$AUTHOR_BAD_REPS"; do
+            [ -f "$f" ] || continue
+            printf '%s\t%s\t%s\n' "$f" "pinned-source" "$(sha256_file "$f")"
+        done
+    } > "$COUNT_SOURCE_TSV"
+
+    mkdir -p "$COUNT_UNPACK_DIR"
+    if [ "$FORCE" = "true" ] || [ ! -d "${COUNT_UNPACK_DIR}/WT_countdata" ]; then
+        log "Unpack WT count tarball"
+        mkdir -p "${COUNT_UNPACK_DIR}/WT_countdata"
+        record_cmd "tar -xzf '${COUNT_PKG}/source/WT_countdata.tar.gz' -C '${COUNT_UNPACK_DIR}/WT_countdata'"
+        tar -xzf "${COUNT_PKG}/source/WT_countdata.tar.gz" -C "${COUNT_UNPACK_DIR}/WT_countdata"
+    else
+        log "Reuse unpacked WT count directory"
+    fi
+    if [ "$FORCE" = "true" ] || [ ! -d "${COUNT_UNPACK_DIR}/Snf2_countdata" ]; then
+        log "Unpack Snf2 count tarball"
+        mkdir -p "${COUNT_UNPACK_DIR}/Snf2_countdata"
+        record_cmd "tar -xzf '${COUNT_PKG}/source/Snf2_countdata.tar.gz' -C '${COUNT_UNPACK_DIR}/Snf2_countdata'"
+        tar -xzf "${COUNT_PKG}/source/Snf2_countdata.tar.gz" -C "${COUNT_UNPACK_DIR}/Snf2_countdata"
+    else
+        log "Reuse unpacked Snf2 count directory"
+    fi
+
+    detect_count_files
+    select_count_files
+    build_count_matrix
+    count_rows="$(awk 'NR > 1 { n++ } END { print n + 0 }' "$GENE_COUNTS_TSV")"
+    count_cols="$(awk 'NR == 1 { print NF - 1; exit }' "$GENE_COUNTS_TSV")"
+    log "Count matrix complete: ${count_rows} genes x ${count_cols} samples -> ${GENE_COUNTS_TSV}"
+    stage_done "counts"
+}
+
+detect_count_files() {
+    log "Detect author count files under ${COUNT_UNPACK_DIR}"
+    {
+        printf 'source_condition\tsource_biol_rep\tfile\n'
+        find "$COUNT_UNPACK_DIR" -type f | while IFS= read -r file; do
+            base="$(basename "$file")"
+            stem="${base%%_MID*}"
+            stem="${stem%%.bam.gbgout}"
+            cond=""
+            rep=""
+            case "$stem" in
+                WT_rep[0-9]*)
+                    cond="WT"
+                    rep="${stem#WT_rep}"
+                    ;;
+                WT[0-9]*)
+                    cond="WT"
+                    rep="${stem#WT}"
+                    ;;
+                WT_[0-9]*)
+                    cond="WT"
+                    rep="${stem#WT_}"
+                    ;;
+                Snf2_rep[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#Snf2_rep}"
+                    ;;
+                SNF2_rep[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#SNF2_rep}"
+                    ;;
+                snf2_rep[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#snf2_rep}"
+                    ;;
+                Snf2[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#Snf2}"
+                    ;;
+                Snf2_[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#Snf2_}"
+                    ;;
+                SNF2[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#SNF2}"
+                    ;;
+                SNF2_[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#SNF2_}"
+                    ;;
+                snf2[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#snf2}"
+                    ;;
+                snf2_[0-9]*)
+                    cond="SNF2"
+                    rep="${stem#snf2_}"
+                    ;;
+            esac
+            if [ -n "$cond" ] && [ -n "$rep" ]; then
+                rep="${rep%%_*}"
+                rep="$(printf '%s\n' "$rep" | awk '{sub(/^0+/, ""); if ($0 == "") $0 = 0; print $0 + 0}')"
+                printf '%s\t%s\t%s\n' "$cond" "$rep" "$file"
+            fi
+        done
+    } > "$COUNT_FILE_MAP_TSV"
+    log "Detected $(tsv_records "$COUNT_FILE_MAP_TSV") candidate count files"
+}
+
+select_count_files() {
+    log "Select count files for the 12+12 biological samples"
+    awk -v sel="$SELECTION_TSV" -v fmap="$COUNT_FILE_MAP_TSV" '
+        BEGIN { FS = OFS = "\t" }
+        FILENAME == sel && FNR > 1 {
+            desired[$2 "\t" ($3 + 0)] = $5 OFS $6 OFS $3 OFS $4
+            next
+        }
+        FILENAME == fmap && FNR > 1 {
+            key = $1 "\t" ($2 + 0)
+            if (key in desired) {
+                if (seen[key]++) {
+                    duplicate[key] = duplicate[key] "," $3
+                } else {
+                    file[key] = $3
+                }
+            }
+            next
+        }
+        END {
+            print "sample_id", "condition", "source_biol_rep", "selected_order", "file"
+            for (key in desired) {
+                split(desired[key], d, OFS)
+                if (!(key in file)) {
+                    missing = missing key "\n"
+                    continue
+                }
+                print d[1], d[2], d[3], d[4], file[key]
+            }
+            if (missing != "") {
+                print "Missing count files for:\n" missing > "/dev/stderr"
+                exit 2
+            }
+            for (key in duplicate) {
+                print "Duplicate count file candidates for " key ":" duplicate[key] > "/dev/stderr"
+                exit 3
+            }
+        }
+    ' "$SELECTION_TSV" "$COUNT_FILE_MAP_TSV" > "${SELECTED_COUNT_FILES_TSV}.tmp"
+
+    tab="$(printf '\t')"
+    {
+        head -n 1 "${SELECTED_COUNT_FILES_TSV}.tmp"
+        tail -n +2 "${SELECTED_COUNT_FILES_TSV}.tmp" | sort -t "$tab" -k2,2 -k4,4n -k1,1
+    } > "$SELECTED_COUNT_FILES_TSV"
+    rm -f "${SELECTED_COUNT_FILES_TSV}.tmp"
+    log "Selected $(tsv_records "$SELECTED_COUNT_FILES_TSV") count files"
+    selected_count_files="$(tsv_records "$SELECTED_COUNT_FILES_TSV")"
+    selected_samples="$(tsv_records "$SELECTION_TSV")"
+    [ "$selected_count_files" = "$selected_samples" ] || die "Expected ${selected_samples} selected count files, got ${selected_count_files}"
+}
+
+build_count_matrix() {
+    log "Build selected gene count matrix"
+    set --
+    while IFS="$(printf '\t')" read -r sample_id condition source_biol_rep selected_order file; do
+        [ "$sample_id" = "sample_id" ] && continue
+        set -- "$@" "$file"
+    done < "$SELECTED_COUNT_FILES_TSV"
+
+    [ "$#" -gt 0 ] || die "No count files selected"
+
+    awk -v mapfile="$SELECTED_COUNT_FILES_TSV" '
+        BEGIN {
+            FS = OFS = "\t"
+            while ((getline < mapfile) > 0) {
+                if ($1 == "sample_id") {
+                    continue
+                }
+                sample[++n] = $1
+                file_to_sample[$5] = $1
+            }
+            close(mapfile)
+        }
+        FNR == 1 {
+            current_sample = file_to_sample[FILENAME]
+            if (current_sample == "") {
+                next
+            }
+        }
+        current_sample != "" && NF >= 2 && $1 !~ /^__/ {
+            gene = $1
+            count = $2
+            genes[gene] = 1
+            counts[gene SUBSEP current_sample] = count
+        }
+        END {
+            printf "gene_id"
+            for (i = 1; i <= n; i++) {
+                printf OFS sample[i]
+            }
+            printf "\n"
+            for (gene in genes) {
+                printf "%s", gene
+                for (i = 1; i <= n; i++) {
+                    key = gene SUBSEP sample[i]
+                    value = (key in counts) ? counts[key] : 0
+                    printf OFS value
+                }
+                printf "\n"
+            }
+        }
+    ' "$@" > "${GENE_COUNTS_TSV}.tmp"
+
+    {
+        head -n 1 "${GENE_COUNTS_TSV}.tmp"
+        tail -n +2 "${GENE_COUNTS_TSV}.tmp" | sort -k1,1
+    } > "$GENE_COUNTS_TSV"
+    rm -f "${GENE_COUNTS_TSV}.tmp"
+}
+
+tar_find_member() {
+    tarball="$1"
+    member_name="$2"
+    tar -tzf "$tarball" | awk -v member="$member_name" '
+        $0 == member || $0 ~ "/" member "$" { print; exit }
+    '
+}
+
+tar_extract_member_uncompressed() {
+    tarball="$1"
+    member="$2"
+    output="$3"
+    tmp="${output}.tmp"
+    rm -f "$tmp"
+    case "$member" in
+        *.gz)
+            tar -xOf "$tarball" "$member" | gzip -dc > "$tmp"
+            ;;
+        *)
+            tar -xOf "$tarball" "$member" > "$tmp"
+            ;;
+    esac
+    mv "$tmp" "$output"
+}
+
+extract_embedded_fasta_from_gff3() {
+    gff3="$1"
+    output="$2"
+    tmp="${output}.tmp"
+    rm -f "$tmp"
+    awk '
+        $0 == "##FASTA" || $0 ~ /^##FASTA[[:space:]]/ { found = 1; next }
+        found { print }
+    ' "$gff3" > "$tmp"
+    records="$(awk '/^>/ { n++ } END { print n + 0 }' "$tmp")"
+    [ "$records" -gt 0 ] || die "No embedded FASTA records found in annotation GFF3: ${gff3}"
+    mv "$tmp" "$output"
+}
+
+strip_embedded_fasta_from_gff3() {
+    input_gff3="$1"
+    output_gff3="$2"
+    tmp="${output_gff3}.tmp"
+    rm -f "$tmp"
+    awk '
+        $0 == "##FASTA" || $0 ~ /^##FASTA[[:space:]]/ { exit }
+        { print }
+    ' "$input_gff3" > "$tmp"
+    rows="$(awk '$0 !~ /^#/ && NF >= 9 { n++ } END { print n + 0 }' "$tmp")"
+    [ "$rows" -gt 0 ] || die "No annotation feature rows remain after stripping embedded FASTA: ${input_gff3}"
+    mv "$tmp" "$output_gff3"
+}
+
+gff3_has_embedded_fasta() {
+    gff3="$1"
+    awk '
+        $0 == "##FASTA" || $0 ~ /^##FASTA[[:space:]]/ { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$gff3"
+}
+
+genome_matches_annotation_seqids() {
+    genome="$1"
+    gff3="$2"
+    genome_ids="${TMP_DIR}/reference_genome_seqids.txt"
+    annotation_ids="${TMP_DIR}/reference_annotation_seqids.txt"
+
+    awk '/^>/ {
+        id = $0
+        sub(/^>/, "", id)
+        split(id, a, /[[:space:]]+/)
+        print a[1]
+    }' "$genome" | sort -u > "$genome_ids"
+
+    awk '
+        $0 == "##FASTA" || $0 ~ /^##FASTA[[:space:]]/ { exit }
+        $0 !~ /^#/ && NF >= 9 { print $1 }
+    ' "$gff3" | sort -u > "$annotation_ids"
+
+    [ -s "$genome_ids" ] || return 1
+    [ -s "$annotation_ids" ] || return 1
+
+    missing="$(awk 'NR == FNR { genome[$1] = 1; next } !($1 in genome) { print $1; exit }' "$genome_ids" "$annotation_ids")"
+    if [ -n "$missing" ]; then
+        log "Genome FASTA seqids do not cover annotation seqid: ${missing}"
+        return 1
+    fi
+    return 0
+}
+
+ensure_reference_tarball() {
+    download_file "$SGD_REFERENCE_TARBALL_URL" "$REF_TARBALL" "SGD S288C reference tarball"
+    if tar -tzf "$REF_TARBALL" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log "Existing SGD reference tarball is not a valid gzip tar archive; redownload once"
+    rm -f "$REF_TARBALL" "${REF_TARBALL}.tmp"
+    download_file "$SGD_REFERENCE_TARBALL_URL" "$REF_TARBALL" "SGD S288C reference tarball"
+    tar -tzf "$REF_TARBALL" >/dev/null 2>&1 || die "Downloaded SGD reference tarball is not a valid gzip tar archive: ${REF_TARBALL}"
+}
+
+reference_stage() {
+    stage_begin "reference"
+    log "Download SGD S288C ${SGD_REFERENCE_RELEASE} reference genome and annotation"
+
+    ensure_reference_tarball
+
+    raw_genome_member="$(tar_find_member "$REF_TARBALL" "$SGD_REFERENCE_RAW_GENOME_MEMBER")"
+    annotation_member="$(tar_find_member "$REF_TARBALL" "$SGD_REFERENCE_ANNOTATION_MEMBER")"
+    [ -n "$raw_genome_member" ] || die "Raw genome FASTA member not found in SGD tarball: ${SGD_REFERENCE_RAW_GENOME_MEMBER}"
+    [ -n "$annotation_member" ] || die "Annotation GFF member not found in SGD tarball: ${SGD_REFERENCE_ANNOTATION_MEMBER}"
+
+    raw_annotation_gff3="${TMP_DIR}/sgd_reference_annotation_with_embedded_fasta.gff3"
+    log "Extract source annotation GFF3 with embedded FASTA to temporary file"
+    tar_extract_member_uncompressed "$REF_TARBALL" "$annotation_member" "$raw_annotation_gff3"
+    gff3_has_embedded_fasta "$raw_annotation_gff3" || die "SGD annotation GFF3 does not contain an embedded FASTA block: ${annotation_member}"
+
+    if [ "$FORCE" = "true" ] || [ ! -s "$REF_ANNOTATION_GFF3" ]; then
+        log "Write feature-only gene annotation GFF3: ${annotation_member} -> ${REF_ANNOTATION_GFF3}"
+        record_cmd "tar -xOf '${REF_TARBALL}' '${annotation_member}' | gzip -dc | awk '\$0==\"##FASTA\"{exit}{print}' > '${REF_ANNOTATION_GFF3}'"
+        strip_embedded_fasta_from_gff3 "$raw_annotation_gff3" "$REF_ANNOTATION_GFF3"
+    elif gff3_has_embedded_fasta "$REF_ANNOTATION_GFF3"; then
+        log "Existing annotation GFF3 still contains embedded FASTA; rewrite feature-only annotation"
+        record_cmd "awk '\$0==\"##FASTA\"{exit}{print}' '${REF_ANNOTATION_GFF3}' > '${REF_ANNOTATION_GFF3}'"
+        strip_embedded_fasta_from_gff3 "$raw_annotation_gff3" "$REF_ANNOTATION_GFF3"
+    else
+        log "Reuse existing annotation GFF3: ${REF_ANNOTATION_GFF3} ($(format_bytes "$(file_size_bytes "$REF_ANNOTATION_GFF3")"))"
+    fi
+
+    need_genome="false"
+    if [ "$FORCE" = "true" ] || [ ! -s "$REF_GENOME_FA" ]; then
+        need_genome="true"
+    elif ! genome_matches_annotation_seqids "$REF_GENOME_FA" "$REF_ANNOTATION_GFF3"; then
+        log "Existing genome FASTA does not match annotation seqids; regenerate from embedded GFF3 FASTA"
+        need_genome="true"
+    fi
+
+    if [ "$need_genome" = "true" ]; then
+        log "Extract genome FASTA from annotation embedded FASTA: ${annotation_member} -> ${REF_GENOME_FA}"
+        record_cmd "tar -xOf '${REF_TARBALL}' '${annotation_member}' | gzip -dc | awk 'f{print} /^##FASTA/{f=1; next}' > '${REF_GENOME_FA}'"
+        extract_embedded_fasta_from_gff3 "$raw_annotation_gff3" "$REF_GENOME_FA"
+    else
+        log "Reuse existing genome FASTA: ${REF_GENOME_FA} ($(format_bytes "$(file_size_bytes "$REF_GENOME_FA")"))"
+    fi
+
+    genome_records="$(awk '/^>/ { n++ } END { print n + 0 }' "$REF_GENOME_FA")"
+    annotation_rows="$(awk 'BEGIN { n = 0 } $0 !~ /^#/ && NF >= 9 { n++ } END { print n + 0 }' "$REF_ANNOTATION_GFF3")"
+    [ "$genome_records" -gt 0 ] || die "Extracted genome FASTA has no sequence records: ${REF_GENOME_FA}"
+    [ "$annotation_rows" -gt 0 ] || die "Extracted annotation GFF3 has no feature rows: ${REF_ANNOTATION_GFF3}"
+    genome_matches_annotation_seqids "$REF_GENOME_FA" "$REF_ANNOTATION_GFF3" || die "Genome FASTA seqids still do not match annotation seqids after regeneration"
+
+    log "Write genome FASTA index: ${REF_GENOME_FAI}"
+    record_cmd "generate FASTA index '${REF_GENOME_FAI}' from '${REF_GENOME_FA}'"
+    write_fasta_fai "$REF_GENOME_FA" "$REF_GENOME_FAI"
+
+    {
+        printf 'file\turl\tsha256\n'
+        printf '%s\t%s\t%s\n' "$REF_TARBALL" "$SGD_REFERENCE_TARBALL_URL" "$(sha256_file "$REF_TARBALL")"
+        printf '%s\t%s:%s:embedded_fasta\t%s\n' "$REF_GENOME_FA" "$REF_TARBALL" "$annotation_member" "$(sha256_file "$REF_GENOME_FA")"
+        printf '%s\t%s:generated_fai\t%s\n' "$REF_GENOME_FAI" "$REF_GENOME_FA" "$(sha256_file "$REF_GENOME_FAI")"
+        printf '%s\t%s:%s:features_before_embedded_fasta\t%s\n' "$REF_ANNOTATION_GFF3" "$REF_TARBALL" "$annotation_member" "$(sha256_file "$REF_ANNOTATION_GFF3")"
+    } > "$REF_SOURCE_TSV"
+
+    {
+        printf 'metric\tvalue\n'
+        printf 'package\t%s\n' "yeast-reference-sgd-r64.4.1-v1"
+        printf 'source\t%s\n' "SGD S288C reference genome"
+        printf 'release\t%s\n' "$SGD_REFERENCE_RELEASE"
+        printf 'archive_date\t%s\n' "$SGD_REFERENCE_ARCHIVE_DATE"
+        printf 'genome_fasta\t%s\n' "reference/genome/$(basename "$REF_GENOME_FA")"
+        printf 'genome_fai\t%s\n' "reference/genome/$(basename "$REF_GENOME_FAI")"
+        printf 'genome_source\t%s\n' "embedded_fasta_from_annotation_gff3"
+        printf 'raw_genome_member\t%s\n' "$raw_genome_member"
+        printf 'annotation_gff3\t%s\n' "reference/annotation/$(basename "$REF_ANNOTATION_GFF3")"
+        printf 'annotation_source\t%s\n' "features_before_embedded_fasta"
+        printf 'genome_records\t%s\n' "$genome_records"
+        printf 'annotation_feature_rows\t%s\n' "$annotation_rows"
+    } > "$REF_SUMMARY_TSV"
+
+    cat > "$REF_MANIFEST_JSON" <<EOF
+{
+  "package": "yeast-reference-sgd-r64.4.1-v1",
+  "source": "SGD S288C reference genome",
+  "release": "${SGD_REFERENCE_RELEASE}",
+  "archive_date": "${SGD_REFERENCE_ARCHIVE_DATE}",
+  "tarball_url": "${SGD_REFERENCE_TARBALL_URL}",
+  "tarball": "source/${SGD_REFERENCE_TARBALL_NAME}",
+  "genome_fasta": "reference/genome/$(basename "$REF_GENOME_FA")",
+  "genome_fai": "reference/genome/$(basename "$REF_GENOME_FAI")",
+  "genome_source": "embedded_fasta_from_annotation_gff3",
+  "raw_genome_member": "${raw_genome_member}",
+  "annotation_gff3": "reference/annotation/$(basename "$REF_ANNOTATION_GFF3")",
+  "annotation_source": "features_before_embedded_fasta",
+  "genome_records": ${genome_records},
+  "annotation_feature_rows": ${annotation_rows}
+}
+EOF
+
+    cat > "$REF_README_MD" <<EOF
+# yeast-reference-sgd-r64.4.1-v1
+
+This package contains the SGD S288C reference genome release ${SGD_REFERENCE_RELEASE}
+prepared for local TAFFISH RNA-seq formal tests.
+
+Files:
+
+- reference/genome/$(basename "$REF_GENOME_FA")
+- reference/genome/$(basename "$REF_GENOME_FAI")
+- reference/annotation/$(basename "$REF_ANNOTATION_GFF3")
+- source/${SGD_REFERENCE_TARBALL_NAME}
+- source_files.tsv
+- reference_summary.tsv
+- manifest.json
+
+The FASTA and GFF3 files are intentionally stored uncompressed so rnaseq-index-flow
+formal tests can discover and consume them directly from the central test-data tree.
+The genome FASTA is extracted from the GFF3 embedded FASTA block so sequence IDs
+match the annotation seqids used by gffread.
+The annotation GFF3 itself is feature-only; its embedded FASTA block is stripped
+to keep downstream annotation-normalization tools from parsing sequence lines.
+EOF
+
+    log "Reference package complete: ${REF_PKG}"
+    log "Genome FASTA records: ${genome_records}"
+    log "Annotation feature rows: ${annotation_rows}"
+    stage_done "reference"
+}
+
+genesets_stage() {
+    stage_begin "genesets"
+    log "Build SGD GO-derived GMT gene sets and yeast background genes"
+
+    if [ ! -s "$REF_ANNOTATION_GFF3" ]; then
+        log "Reference annotation is missing, running reference stage first"
+        reference_stage
+    fi
+    if [ ! -s "$GENE_COUNTS_TSV" ]; then
+        log "Selected count matrix is missing, running counts stage first"
+        counts_stage
+    fi
+
+    download_file "$GO_BASIC_OBO_URL" "$GO_BASIC_OBO" "Gene Ontology go-basic OBO"
+
+    build_go_terms_table
+    build_gene_go_terms_table
+    build_background_genes
+    build_gmt_file "biological_process" "$GENESETS_GO_BP_GMT"
+    build_gmt_file "molecular_function" "$GENESETS_GO_MF_GMT"
+    build_gmt_file "cellular_component" "$GENESETS_GO_CC_GMT"
+    build_gmt_file "all" "$GENESETS_GO_ALL_GMT"
+    build_gene_set_index
+    write_genesets_metadata
+
+    log "Gene-set package complete: ${GENESETS_PKG}"
+    stage_done "genesets"
+}
+
+build_go_terms_table() {
+    log "Parse GO terms and namespaces: ${GO_BASIC_OBO} -> ${GENESETS_GO_TERMS_TSV}"
+    record_cmd "awk parse GO OBO '${GO_BASIC_OBO}' > '${GENESETS_GO_TERMS_TSV}'"
+    awk '
+        BEGIN {
+            OFS = "\t"
+            print "go_id", "name", "namespace"
+            in_term = 0
+            id = name = namespace = obsolete = ""
+        }
+        function flush_term() {
+            if (id ~ /^GO:/ && name != "" && namespace != "" && obsolete != "true") {
+                print id, name, namespace
+            }
+        }
+        $0 == "[Term]" {
+            flush_term()
+            in_term = 1
+            id = name = namespace = obsolete = ""
+            next
+        }
+        $0 ~ /^\[/ {
+            flush_term()
+            in_term = 0
+            id = name = namespace = obsolete = ""
+            next
+        }
+        in_term && /^id: GO:/ {
+            id = $2
+            next
+        }
+        in_term && /^name: / {
+            name = substr($0, 7)
+            gsub(/\t/, " ", name)
+            next
+        }
+        in_term && /^namespace: / {
+            namespace = $2
+            next
+        }
+        in_term && /^is_obsolete: true/ {
+            obsolete = "true"
+            next
+        }
+        END {
+            flush_term()
+        }
+    ' "$GO_BASIC_OBO" > "${GENESETS_GO_TERMS_TSV}.tmp"
+    mv "${GENESETS_GO_TERMS_TSV}.tmp" "$GENESETS_GO_TERMS_TSV"
+    [ "$(tsv_records "$GENESETS_GO_TERMS_TSV")" -gt 0 ] || die "GO OBO parsing produced no terms: ${GENESETS_GO_TERMS_TSV}"
+}
+
+build_gene_go_terms_table() {
+    log "Extract gene-to-GO mappings from SGD annotation: ${GENESETS_GENE_GO_TERMS_TSV}"
+    record_cmd "extract GO annotations from '${REF_ANNOTATION_GFF3}' > '${GENESETS_GENE_GO_TERMS_TSV}'"
+    printf 'gene_id\tgo_id\n' > "${GENESETS_GENE_GO_TERMS_TSV}.tmp"
+    awk -F '\t' '
+        BEGIN {
+            OFS = "\t"
+        }
+        function attr_value(attrs, key,    n, i, part, kv) {
+            n = split(attrs, part, ";")
+            for (i = 1; i <= n; i++) {
+                split(part[i], kv, "=")
+                if (kv[1] == key) {
+                    return kv[2]
+                }
+            }
+            return ""
+        }
+        $0 !~ /^#/ && NF >= 9 && $3 == "gene" {
+            gene = attr_value($9, "ID")
+            terms = attr_value($9, "Ontology_term")
+            if (gene == "" || terms == "") {
+                next
+            }
+            n = split(terms, term, ",")
+            for (i = 1; i <= n; i++) {
+                go = term[i]
+                if (go ~ /^GO:/ &&
+                    go != "GO:0008150" &&
+                    go != "GO:0003674" &&
+                    go != "GO:0005575") {
+                    print gene, go
+                }
+            }
+        }
+    ' "$REF_ANNOTATION_GFF3" | sort -u >> "${GENESETS_GENE_GO_TERMS_TSV}.tmp"
+    mv "${GENESETS_GENE_GO_TERMS_TSV}.tmp" "$GENESETS_GENE_GO_TERMS_TSV"
+    [ "$(tsv_records "$GENESETS_GENE_GO_TERMS_TSV")" -gt 0 ] || die "SGD annotation yielded no gene-to-GO mappings: ${REF_ANNOTATION_GFF3}"
+}
+
+build_background_genes() {
+    log "Build yeast background gene list: ${GENESETS_BACKGROUND_TSV}"
+    record_cmd "derive enrichment background genes from '${GENE_COUNTS_TSV}' > '${GENESETS_BACKGROUND_TSV}'"
+    {
+        printf 'gene_id\n'
+        awk -F '\t' '
+            NR > 1 &&
+            $1 != "" &&
+            $1 !~ /^(ambiguous|alignment_|no_feature|not_aligned|__)/ {
+                print $1
+            }
+        ' "$GENE_COUNTS_TSV" | sort -u
+    } > "${GENESETS_BACKGROUND_TSV}.tmp"
+    mv "${GENESETS_BACKGROUND_TSV}.tmp" "$GENESETS_BACKGROUND_TSV"
+    [ "$(tsv_records "$GENESETS_BACKGROUND_TSV")" -gt 0 ] || die "Background gene list is empty: ${GENESETS_BACKGROUND_TSV}"
+}
+
+build_gmt_file() {
+    namespace="$1"
+    output="$2"
+    log "Build GMT (${namespace}): ${output}"
+    record_cmd "build ${namespace} GMT from SGD GO annotations > '${output}'"
+    awk -F '\t' -v OFS='\t' -v ns="$namespace" \
+        -v bg="$GENESETS_BACKGROUND_TSV" \
+        -v terms="$GENESETS_GO_TERMS_TSV" \
+        -v gene_terms="$GENESETS_GENE_GO_TERMS_TSV" '
+        FILENAME == bg {
+            if (FNR > 1) {
+                background[$1] = 1
+            }
+            next
+        }
+        FILENAME == terms {
+            if (FNR > 1 && (ns == "all" || $3 == ns)) {
+                term_name[$1] = $2
+                term_namespace[$1] = $3
+            }
+            next
+        }
+        FILENAME == gene_terms {
+            if (FNR > 1 && ($2 in term_name) && ($1 in background)) {
+                key = $2 SUBSEP $1
+                if (!seen[key]++) {
+                    genes[$2] = genes[$2] OFS $1
+                    size[$2]++
+                }
+            }
+            next
+        }
+        END {
+            for (term in size) {
+                print term, term_name[term] " [" term_namespace[term] "]", substr(genes[term], 2)
+            }
+        }
+    ' "$GENESETS_BACKGROUND_TSV" "$GENESETS_GO_TERMS_TSV" "$GENESETS_GENE_GO_TERMS_TSV" \
+        | sort -t "$(printf '\t')" -k1,1 > "${output}.tmp"
+    mv "${output}.tmp" "$output"
+    [ -s "$output" ] || die "GMT file is empty: ${output}"
+}
+
+build_gene_set_index() {
+    log "Write gene-set index: ${GENESETS_INDEX_TSV}"
+    {
+        printf 'gmt\tset_id\tdescription\tsize\n'
+        for gmt in "$GENESETS_GO_BP_GMT" "$GENESETS_GO_MF_GMT" "$GENESETS_GO_CC_GMT" "$GENESETS_GO_ALL_GMT"; do
+            awk -F '\t' -v file="$(basename "$gmt")" 'NF >= 3 { print file "\t" $1 "\t" $2 "\t" (NF - 2) }' "$gmt"
+        done
+    } > "$GENESETS_INDEX_TSV"
+}
+
+gmt_sets() {
+    awk 'NF >= 3 { n++ } END { print n + 0 }' "$1"
+}
+
+gmt_unique_genes() {
+    awk -F '\t' 'NF >= 3 { for (i = 3; i <= NF; i++) seen[$i] = 1 } END { for (g in seen) n++; print n + 0 }' "$1"
+}
+
+write_genesets_metadata() {
+    bp_sets="$(gmt_sets "$GENESETS_GO_BP_GMT")"
+    mf_sets="$(gmt_sets "$GENESETS_GO_MF_GMT")"
+    cc_sets="$(gmt_sets "$GENESETS_GO_CC_GMT")"
+    all_sets="$(gmt_sets "$GENESETS_GO_ALL_GMT")"
+    background_genes="$(tsv_records "$GENESETS_BACKGROUND_TSV")"
+    gene_go_pairs="$(tsv_records "$GENESETS_GENE_GO_TERMS_TSV")"
+    go_terms="$(tsv_records "$GENESETS_GO_TERMS_TSV")"
+
+    {
+        printf 'file\turl\tsha256\n'
+        printf '%s\t%s\t%s\n' "$GO_BASIC_OBO" "$GO_BASIC_OBO_URL" "$(sha256_file "$GO_BASIC_OBO")"
+        printf '%s\t%s\t%s\n' "$REF_ANNOTATION_GFF3" "SGD annotation GFF3 with Ontology_term attributes" "$(sha256_file "$REF_ANNOTATION_GFF3")"
+        printf '%s\t%s\t%s\n' "$GENE_COUNTS_TSV" "selected count matrix background source" "$(sha256_file "$GENE_COUNTS_TSV")"
+        for f in "$GENESETS_GO_BP_GMT" "$GENESETS_GO_MF_GMT" "$GENESETS_GO_CC_GMT" "$GENESETS_GO_ALL_GMT" "$GENESETS_BACKGROUND_TSV" "$GENESETS_GO_TERMS_TSV" "$GENESETS_GENE_GO_TERMS_TSV" "$GENESETS_INDEX_TSV"; do
+            printf '%s\tgenerated\t%s\n' "$f" "$(sha256_file "$f")"
+        done
+    } > "$GENESETS_SOURCE_TSV"
+
+    {
+        printf 'metric\tvalue\n'
+        printf 'package\t%s\n' "yeast-sgd-go-gene-sets-r64.4.1-v1"
+        printf 'source\t%s\n' "SGD S288C annotation Ontology_term attributes plus Gene Ontology go-basic OBO"
+        printf 'sgd_reference_release\t%s\n' "$SGD_REFERENCE_RELEASE"
+        printf 'go_basic_obo_url\t%s\n' "$GO_BASIC_OBO_URL"
+        printf 'background_source\t%s\n' "yeast-snf2-counts-medium-v1/counts/gene_counts_12v12.tsv"
+        printf 'background_genes\t%s\n' "$background_genes"
+        printf 'go_terms_parsed\t%s\n' "$go_terms"
+        printf 'gene_go_pairs\t%s\n' "$gene_go_pairs"
+        printf 'bp_sets\t%s\n' "$bp_sets"
+        printf 'mf_sets\t%s\n' "$mf_sets"
+        printf 'cc_sets\t%s\n' "$cc_sets"
+        printf 'all_sets\t%s\n' "$all_sets"
+        printf 'bp_genes\t%s\n' "$(gmt_unique_genes "$GENESETS_GO_BP_GMT")"
+        printf 'mf_genes\t%s\n' "$(gmt_unique_genes "$GENESETS_GO_MF_GMT")"
+        printf 'cc_genes\t%s\n' "$(gmt_unique_genes "$GENESETS_GO_CC_GMT")"
+        printf 'all_genes\t%s\n' "$(gmt_unique_genes "$GENESETS_GO_ALL_GMT")"
+    } > "$GENESETS_SUMMARY_TSV"
+
+    cat > "$GENESETS_MANIFEST_JSON" <<EOF
+{
+  "package": "yeast-sgd-go-gene-sets-r64.4.1-v1",
+  "source": "SGD S288C annotation Ontology_term attributes plus Gene Ontology go-basic OBO",
+  "sgd_reference_release": "${SGD_REFERENCE_RELEASE}",
+  "go_basic_obo_url": "${GO_BASIC_OBO_URL}",
+  "background_source": "yeast-snf2-counts-medium-v1/counts/gene_counts_12v12.tsv",
+  "background_genes": ${background_genes},
+  "gene_go_pairs": ${gene_go_pairs},
+  "gene_sets": {
+    "bp": "gene_sets/$(basename "$GENESETS_GO_BP_GMT")",
+    "mf": "gene_sets/$(basename "$GENESETS_GO_MF_GMT")",
+    "cc": "gene_sets/$(basename "$GENESETS_GO_CC_GMT")",
+    "all": "gene_sets/$(basename "$GENESETS_GO_ALL_GMT")"
+  },
+  "background": "background/$(basename "$GENESETS_BACKGROUND_TSV")",
+  "bp_sets": ${bp_sets},
+  "mf_sets": ${mf_sets},
+  "cc_sets": ${cc_sets},
+  "all_sets": ${all_sets}
+}
+EOF
+
+    cat > "$GENESETS_README_MD" <<EOF
+# yeast-sgd-go-gene-sets-r64.4.1-v1
+
+This package contains GO-derived yeast gene sets prepared for local TAFFISH
+RNA-seq enrichment formal tests.
+
+Files:
+
+- gene_sets/$(basename "$GENESETS_GO_BP_GMT")
+- gene_sets/$(basename "$GENESETS_GO_MF_GMT")
+- gene_sets/$(basename "$GENESETS_GO_CC_GMT")
+- gene_sets/$(basename "$GENESETS_GO_ALL_GMT")
+- background/$(basename "$GENESETS_BACKGROUND_TSV")
+- metadata/$(basename "$GENESETS_GO_TERMS_TSV")
+- metadata/$(basename "$GENESETS_GENE_GO_TERMS_TSV")
+- metadata/$(basename "$GENESETS_INDEX_TSV")
+- source/${GO_BASIC_OBO_NAME}
+- source_files.tsv
+- gene_sets_summary.tsv
+- manifest.json
+
+Gene IDs are yeast systematic IDs matching the local count matrix and DE flow
+outputs. Root GO terms are excluded. The background gene list is derived from
+the selected 12-vs-12 count matrix after excluding non-gene summary rows.
+This package uses GO terms directly present in SGD GFF3 Ontology_term attributes
+and does not propagate annotations to GO ancestor terms.
+EOF
+}
+
+fastq_stage() {
+    stage_begin "fastq"
+    log "Download ENA lane FASTQs, verify md5, merge lanes and sample reads"
+    if [ ! -s "$SOURCE_ACCESSIONS_TSV" ]; then
+        log "Source accession table is missing, running metadata stage first"
+        metadata_stage
+    fi
+
+    awk -v n="$LIMIT_SAMPLES" '
+        BEGIN { FS = "\t" }
+        NR > 1 && !seen[$1]++ {
+            if (n == 0 || ++count <= n) {
+                print $1
+            }
+        }
+    ' "$SOURCE_ACCESSIONS_TSV" > "${TMP_DIR}/fastq_sample_ids.txt"
+
+    total_fastq_samples="$(awk 'NF { n++ } END { print n + 0 }' "${TMP_DIR}/fastq_sample_ids.txt")"
+    log "FASTQ stage will process ${total_fastq_samples} biological samples"
+    if [ "$LIMIT_SAMPLES" != "0" ]; then
+        log "FASTQ stage is limited by --limit-samples ${LIMIT_SAMPLES}"
+    fi
+
+    : > "$FASTQ_GENERATED_SAMPLES_TSV"
+    printf 'sample_id\tread1\tcondition\tlibrary_layout\tsource_biological_replicate\n' > "$FASTQ_GENERATED_SAMPLES_TSV"
+
+    sample_index=0
+    while IFS= read -r sample_id; do
+        [ -n "$sample_id" ] || continue
+        sample_index=$((sample_index + 1))
+        process_fastq_sample "$sample_id" "$sample_index" "$total_fastq_samples" < /dev/null
+    done < "${TMP_DIR}/fastq_sample_ids.txt"
+
+    if find "${FASTQ_PKG}/reads" -type f -name '*.fq.gz' | grep . >/dev/null 2>&1; then
+        log "Build FASTQ statistics table: ${FASTQ_STATS_TSV}"
+        record_cmd "${SEQKIT_CMD} seqkit stats -T '${FASTQ_PKG}/reads/'*.fq.gz > '${FASTQ_STATS_TSV}'"
+        "$SEQKIT_CMD" seqkit stats -T "${FASTQ_PKG}/reads/"*.fq.gz > "$FASTQ_STATS_TSV"
+    fi
+    log "FASTQ files generated: $(find "${FASTQ_PKG}/reads" -type f -name '*.fq.gz' | wc -l | awk '{print $1}')"
+    stage_done "fastq"
+}
+
+append_generated_fastq_sample() {
+    sample_id="$1"
+    awk -v sid="$sample_id" '
+        BEGIN { FS = OFS = "\t" }
+        NR == 1 { next }
+        $1 == sid {
+            print $1, "reads/" $1 ".fq.gz", $2, "single-end", $4
+            exit
+        }
+    ' "$SOURCE_ACCESSIONS_TSV" >> "$FASTQ_GENERATED_SAMPLES_TSV"
+}
+
+process_fastq_sample() {
+    sample_id="$1"
+    sample_index="$2"
+    total_fastq_samples="$3"
+    lane_table="${TMP_DIR}/${sample_id}.source_lanes.tsv"
+    awk -v sid="$sample_id" '
+        BEGIN { FS = OFS = "\t" }
+        NR > 1 && $1 == sid { print $0 }
+    ' "$SOURCE_ACCESSIONS_TSV" > "$lane_table"
+
+    [ -s "$lane_table" ] || die "No source lanes found for ${sample_id}"
+    lane_count="$(awk 'NF { n++ } END { print n + 0 }' "$lane_table")"
+    log ""
+    log "Sample ${sample_index}/${total_fastq_samples}: ${sample_id} (${lane_count} ENA lanes)"
+
+    out_fastq="${FASTQ_PKG}/reads/${sample_id}.fq.gz"
+    if [ "$FORCE" != "true" ] && [ -s "$out_fastq" ]; then
+        if gzip -t "$out_fastq" >/dev/null 2>&1; then
+            log "Sample already complete; skip lane download for ${sample_id}: ${out_fastq} ($(format_bytes "$(file_size_bytes "$out_fastq")"))"
+            append_generated_fastq_sample "$sample_id"
+            return 0
+        fi
+        log "Existing sampled FASTQ is not valid gzip, will regenerate: ${out_fastq}"
+    fi
+
+    sample_dir="${CACHE_DIR}/lanes/${sample_id}"
+    merged_dir="${INTERMEDIATE}/merged_fastq"
+    mkdir -p "$sample_dir" "$merged_dir"
+
+    lane_index=0
+    while IFS="$(printf '\t')" read -r sid condition source_condition source_biol_rep selected_order lane run_accession fastq_url fastq_md5 fastq_bytes; do
+        lane_index=$((lane_index + 1))
+        lane_fastq="${sample_dir}/${run_accession}.fastq.gz"
+        log "Lane ${lane_index}/${lane_count} for ${sample_id}: ${run_accession}"
+        download_file "$fastq_url" "$lane_fastq" "FASTQ ${run_accession}" "$fastq_bytes"
+        if [ -n "$fastq_md5" ] && [ "$fastq_md5" != "." ]; then
+            log "Verify md5 for ${run_accession}"
+            actual_md5="$(md5_file "$lane_fastq")"
+            if [ "$actual_md5" != "$fastq_md5" ] && [ "$FORCE" != "true" ]; then
+                log "md5 mismatch for ${run_accession}, remove cached file and redownload once: expected ${fastq_md5}, got ${actual_md5}"
+                rm -f "$lane_fastq" "${lane_fastq}.tmp"
+                download_file "$fastq_url" "$lane_fastq" "FASTQ ${run_accession}" "$fastq_bytes"
+                log "Verify md5 for ${run_accession} after redownload"
+                actual_md5="$(md5_file "$lane_fastq")"
+            fi
+            [ "$actual_md5" = "$fastq_md5" ] || die "md5 mismatch for ${run_accession}: expected ${fastq_md5}, got ${actual_md5}"
+            log "md5 OK: ${run_accession}"
+        fi
+    done < "$lane_table"
+
+    merged_fastq="${merged_dir}/${sample_id}.merged.fq.gz"
+    if [ "$FORCE" = "true" ] || [ ! -s "$merged_fastq" ]; then
+        log "Merge ${lane_count} lane FASTQs for ${sample_id}"
+        log "Using gzip-member concatenation instead of decompress/recompress"
+        record_cmd "cat '${sample_dir}'/*.fastq.gz > '${merged_fastq}'"
+        rm -f "${merged_fastq}.tmp"
+        cat "${sample_dir}"/*.fastq.gz > "${merged_fastq}.tmp"
+        mv "${merged_fastq}.tmp" "$merged_fastq"
+        log "Merged FASTQ complete: ${merged_fastq} ($(format_bytes "$(file_size_bytes "$merged_fastq")"))"
+        log "Check merged gzip integrity for ${merged_fastq}"
+        gzip -t "$merged_fastq" || die "Merged FASTQ gzip check failed: ${merged_fastq}"
+        log "Merged gzip OK: ${sample_id}"
+    else
+        log "Reuse merged FASTQ for ${sample_id}: ${merged_fastq}"
+    fi
+
+    need_sample="false"
+    if [ "$FORCE" = "true" ] || [ ! -s "$out_fastq" ]; then
+        need_sample="true"
+    elif ! gzip -t "$out_fastq" >/dev/null 2>&1; then
+        log "Existing sampled FASTQ is not valid gzip, will regenerate: ${out_fastq}"
+        need_sample="true"
+    fi
+
+    if [ "$need_sample" = "true" ]; then
+        log "Sample ${READS_PER_SAMPLE} reads for ${sample_id} with SeqKit seed ${SEED}"
+        record_cmd "${SEQKIT_CMD} seqkit sample -2 -s '${SEED}' -n '${READS_PER_SAMPLE}' -o '${out_fastq}' '${merged_fastq}'"
+        sample_tmp="${out_fastq}.tmp.fq.gz"
+        rm -f "$sample_tmp"
+        "$SEQKIT_CMD" seqkit sample -2 -s "$SEED" -n "$READS_PER_SAMPLE" -o "$sample_tmp" "$merged_fastq"
+        mv "$sample_tmp" "$out_fastq"
+        log "Check gzip integrity for ${out_fastq}"
+        gzip -t "$out_fastq" || die "Sampled FASTQ gzip check failed: ${out_fastq}"
+        log "Sampled gzip OK: ${sample_id}"
+        log "Sample FASTQ complete: ${out_fastq} ($(format_bytes "$(file_size_bytes "$out_fastq")"))"
+    else
+        log "Reuse existing sampled FASTQ for ${sample_id}: ${out_fastq} ($(format_bytes "$(file_size_bytes "$out_fastq")"))"
+    fi
+
+    append_generated_fastq_sample "$sample_id"
+
+    if [ "$KEEP_LANES" != "true" ]; then
+        log "Clean lane cache for ${sample_id}"
+        rm -rf "$sample_dir"
+        rm -f "$merged_fastq"
+    else
+        log "Keep lane cache for ${sample_id}: ${sample_dir}"
+    fi
+}
+
+final_checksums() {
+    checksums="${REPORTS}/checksums.tsv"
+    log "Write checksums: ${checksums}"
+    {
+        printf 'sha256\tpath\n'
+        find "$RESULTS" "$INPUTS" "$REPORTS" -type f ! -name 'checksums.tsv' | sort | while IFS= read -r f; do
+            printf '%s\t%s\n' "$(sha256_file "$f")" "$f"
+        done
+    } > "$checksums"
+}
+
+ensure_layout
+log "Run ${APP_NAME} ${APP_VERSION}"
+log "Output directory: ${OUTDIR}"
+log "Parameters: stage=${STAGE}, profile=${PROFILE}, reads_per_sample=${READS_PER_SAMPLE}, seed=${SEED}, threads=${THREADS}, limit_samples=${LIMIT_SAMPLES}, resume=${RESUME}, force=${FORCE}, keep_lanes=${KEEP_LANES}"
+write_static_inputs
+write_versions
+write_methods
+write_plan_report
+
+case "$STAGE" in
+    plan)
+        stage_begin "plan"
+        log "No network download will be performed"
+        log "Review download plan: ${REPORTS}/download-plan.md"
+        stage_done "plan"
+        ;;
+    metadata)
+        metadata_stage
+        ;;
+    counts)
+        metadata_stage
+        counts_stage
+        ;;
+    reference)
+        reference_stage
+        ;;
+    genesets)
+        genesets_stage
+        ;;
+    fastq)
+        fastq_stage
+        ;;
+    all)
+        metadata_stage
+        counts_stage
+        reference_stage
+        genesets_stage
+        fastq_stage
+        ;;
+esac
+
+write_manifest
+write_flow_summary
+final_checksums
+
+log "Done. Outputs are under ${OUTDIR}"

@@ -1,0 +1,35 @@
+[package]
+name = "rnaseq-yeast-get-data"
+kind = "flow"
+version = "0.1.0"
+release = 1
+license = "Apache-2.0"
+main = "src/main.taf"
+
+[repository]
+url = "https://github.com/taffish/rnaseq-yeast-get-data"
+
+[command]
+name = "taf-rnaseq-yeast-get-data"
+
+[runtime]
+pipe = false
+command_mode = false
+
+[meta]
+domain = "bio"
+categories = ["rna-seq", "test-data", "yeast", "data-preparation", "workflow"]
+keywords = ["rna-seq", "yeast", "snf2", "PRJEB5348", "ENA", "FASTQ", "counts", "SGD", "reference", "annotation", "GO", "GMT", "test-data"]
+description = "TAFFISH-maintained data preparation flow for the yeast SNF2 RNA-seq formal test dataset, including FASTQ, counts, SGD reference resources and GO-derived gene sets."
+
+[upstream]
+name = "Highly replicated yeast RNA-seq SNF2 dataset and SGD S288C reference"
+type = "public-dataset"
+homepage = "https://www.ebi.ac.uk/ena/browser/view/PRJEB5348"
+version = "PRJEB5348-profDGE48-375dc0d-SGD-R64.4.1"
+license = "public-data"
+description = "Public yeast WT versus snf2 knockout RNA-seq dataset with author-provided ENA mapping/count files, SGD S288C R64.4.1 reference genome/annotation and GO-derived gene-set resources."
+
+[dependencies]
+taf-seqkit = "2.13.0-r2"
+taf-sra-tools = "3.4.1-r1"
