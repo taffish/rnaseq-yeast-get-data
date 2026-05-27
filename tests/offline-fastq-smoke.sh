@@ -18,11 +18,31 @@ cat > "$BIN_DIR/taf-seqkit-v2.13.0-r2" <<'EOF'
 #!/bin/sh
 set -eu
 
+sq() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+emit_compiled() {
+    self="$(command -v taf-seqkit-v2.13.0-r2)"
+    printf '#!/bin/sh\n'
+    printf 'set -eu\n'
+    printf '%s' "$(sq "$self")"
+    for arg in "$@"; do
+        case "$arg" in
+            *'$'*|*'"'*|*'*'*)
+                printf ' %s' "$arg"
+                ;;
+            *)
+                printf ' %s' "$(sq "$arg")"
+                ;;
+        esac
+    done
+    printf '\n'
+}
+
 if [ "${1:-}" = "--compile" ]; then
-    cat <<'EOS'
-#!/bin/sh
-exit 0
-EOS
+    shift
+    emit_compiled "$@"
     exit 0
 fi
 
@@ -81,26 +101,6 @@ esac
 EOF
 chmod +x "$BIN_DIR/taf-seqkit-v2.13.0-r2"
 
-cat > "$BIN_DIR/taf-sra-tools-v3.4.1-r1" <<'EOF'
-#!/bin/sh
-set -eu
-
-if [ "${1:-}" = "--compile" ]; then
-    cat <<'EOS'
-#!/bin/sh
-exit 0
-EOS
-    exit 0
-fi
-
-if [ "${1:-}" = "sra-info" ]; then
-    printf '%s\n' 'sra-tools 3.4.1'
-    exit 0
-fi
-exit 2
-EOF
-chmod +x "$BIN_DIR/taf-sra-tools-v3.4.1-r1"
-
 make_lane() {
     out="$1"
     start="$2"
@@ -118,6 +118,7 @@ make_lane "$LANE_DIR/lane1.fq.gz" 1 6
 make_lane "$LANE_DIR/lane2.fq.gz" 7 12
 make_lane "$LANE_DIR/lane3.fq.gz" 13 18
 make_lane "$LANE_DIR/lane4.fq.gz" 19 24
+printf '%s\n' 'primary source is intentionally wrong' | gzip -c > "$LANE_DIR/lane3.primary-bad.fq.gz"
 
 md5_one() {
     if command -v md5sum >/dev/null 2>&1; then
@@ -137,11 +138,11 @@ lane3_bytes="$(wc -c < "$LANE_DIR/lane3.fq.gz" | awk '{print $1}')"
 lane4_bytes="$(wc -c < "$LANE_DIR/lane4.fq.gz" | awk '{print $1}')"
 
 cat > "$OUTDIR/03_results/yeast-snf2-fastq-mini-v1/source_accessions.tsv" <<EOF
-sample_id	condition	source_condition	source_biol_rep	selected_order	lane	run_accession	fastq_url	fastq_md5	fastq_bytes
-TINY_01	test	TEST	1	1	1	LANE1	file://${LANE_DIR}/lane1.fq.gz	${lane1_md5}	${lane1_bytes}
-TINY_01	test	TEST	1	1	2	LANE2	file://${LANE_DIR}/lane2.fq.gz	${lane2_md5}	${lane2_bytes}
-TINY_02	test	TEST	2	2	1	LANE3	file://${LANE_DIR}/lane3.fq.gz	${lane3_md5}	${lane3_bytes}
-TINY_02	test	TEST	2	2	2	LANE4	file://${LANE_DIR}/lane4.fq.gz	${lane4_md5}	${lane4_bytes}
+sample_id	condition	source_condition	source_biol_rep	selected_order	lane	run_accession	fastq_url	fastq_md5	fastq_bytes	fallback_url	fallback_md5	fallback_bytes	fallback_kind
+TINY_01	test	TEST	1	1	1	LANE1	file://${LANE_DIR}/lane1.fq.gz	${lane1_md5}	${lane1_bytes}	.	.	.	.
+TINY_01	test	TEST	1	1	2	LANE2	file://${LANE_DIR}/lane2.fq.gz	${lane2_md5}	${lane2_bytes}	.	.	.	.
+TINY_02	test	TEST	2	2	1	LANE3	file://${LANE_DIR}/lane3.primary-bad.fq.gz	${lane3_md5}	${lane3_bytes}	file://${LANE_DIR}/lane3.fq.gz	${lane3_md5}	${lane3_bytes}	submitted_ftp
+TINY_02	test	TEST	2	2	2	LANE4	file://${LANE_DIR}/lane4.fq.gz	${lane4_md5}	${lane4_bytes}	.	.	.	.
 EOF
 
 PATH="$BIN_DIR:$PATH" "$APP_ROOT/scripts/run-streaming.sh" \
@@ -162,7 +163,11 @@ done
 grep -q 'Using gzip-member concatenation' "$OUTDIR/01_logs/flow.log"
 grep -q 'Sampled gzip OK: TINY_01' "$OUTDIR/01_logs/flow.log"
 grep -q 'Sampled gzip OK: TINY_02' "$OUTDIR/01_logs/flow.log"
+grep -q 'Primary FASTQ source failed for LANE3' "$OUTDIR/01_logs/flow.log"
+grep -q 'Fallback FASTQ source succeeded for LANE3: submitted_ftp' "$OUTDIR/01_logs/flow.log"
 test -s "$OUTDIR/03_results/yeast-snf2-fastq-mini-v1/expected/fastq_stats.tsv"
+test -s "$OUTDIR/03_results/yeast-snf2-fastq-mini-v1/source_downloads.tsv"
+grep -q '^TINY_02	LANE3	.*	submitted_ftp	.*	true	primary failed; fallback succeeded$' "$OUTDIR/03_results/yeast-snf2-fastq-mini-v1/source_downloads.tsv"
 
 PATH="$BIN_DIR:$PATH" "$APP_ROOT/scripts/run-streaming.sh" \
     --outdir "$OUTDIR" \
@@ -177,7 +182,7 @@ test "$generated_count" = "2"
 
 rm -f "$OUTDIR/03_results/yeast-snf2-fastq-mini-v1/reads/TINY_02.fq.gz"
 mkdir -p "$OUTDIR/02_intermediate/cache/lanes/TINY_02"
-dd if=/dev/zero of="$OUTDIR/02_intermediate/cache/lanes/TINY_02/LANE3.fastq.gz" bs="$lane3_bytes" count=1 >/dev/null 2>&1
+dd if=/dev/zero of="$OUTDIR/02_intermediate/cache/lanes/TINY_02/LANE4.fastq.gz" bs="$lane4_bytes" count=1 >/dev/null 2>&1
 
 PATH="$BIN_DIR:$PATH" "$APP_ROOT/scripts/run-streaming.sh" \
     --outdir "$OUTDIR" \
@@ -185,11 +190,12 @@ PATH="$BIN_DIR:$PATH" "$APP_ROOT/scripts/run-streaming.sh" \
     --resume true \
     --reads-per-sample 5
 
-grep -q 'md5 mismatch for LANE3, remove cached file and redownload once' "$OUTDIR/01_logs/flow.log"
+grep -q 'FASTQ verification failed for LANE4 from fastq_ftp; remove cached file and redownload once' "$OUTDIR/01_logs/flow.log"
+grep -q 'FASTQ source OK for LANE4: fastq_ftp' "$OUTDIR/01_logs/flow.log"
 grep -q 'Sample already complete; skip lane download for TINY_01' "$OUTDIR/01_logs/flow.log"
 test -s "$OUTDIR/03_results/yeast-snf2-fastq-mini-v1/reads/TINY_02.fq.gz"
 gzip -t "$OUTDIR/03_results/yeast-snf2-fastq-mini-v1/reads/TINY_02.fq.gz"
-grep -q 'LANE3.fastq.gz' "$OUTDIR/04_reports/commands.sh"
+grep -q 'LANE4.fastq.gz' "$OUTDIR/04_reports/commands.sh"
 if grep -q 'LANE1.fastq.gz' "$OUTDIR/04_reports/commands.sh"; then
     exit 1
 fi

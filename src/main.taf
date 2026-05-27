@@ -21,16 +21,10 @@ ARGS
 
 RUN
 <taffish>
-if false; then
-    [[taf: taf-seqkit-v2.13.0-r2 seqkit version]]
-    [[taf: taf-sra-tools-v3.4.1-r1 sra-info --version]]
-fi
-
-<shell>
 set -eu
 
 APP_NAME="rnaseq-yeast-get-data"
-APP_VERSION="0.1.0-r1"
+APP_VERSION="0.1.0-r2"
 PROJECT_ACCESSION="PRJEB5348"
 AUTHOR_COMMIT="375dc0d57d9d1fa96a4245a6530e0fda34305891"
 
@@ -45,10 +39,7 @@ FORCE="::force::"
 RESUME="::resume::"
 KEEP_LANES="::keep-lanes::"
 
-SEQKIT_CMD="taf-seqkit-v2.13.0-r2"
-SRA_CMD="taf-sra-tools-v3.4.1-r1"
-
-ENA_REPORT_URL="https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJEB5348&result=read_run&fields=run_accession,experiment_accession,sample_accession,secondary_sample_accession,study_accession,secondary_study_accession,scientific_name,library_strategy,library_source,library_selection,library_layout,instrument_platform,instrument_model,experiment_title,sample_title,nominal_length,read_count,base_count,fastq_ftp,fastq_md5,fastq_bytes&format=tsv&download=true"
+ENA_REPORT_URL="https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJEB5348&result=read_run&fields=run_accession,experiment_accession,sample_accession,secondary_sample_accession,study_accession,secondary_study_accession,scientific_name,library_strategy,library_source,library_selection,library_layout,instrument_platform,instrument_model,experiment_title,sample_title,nominal_length,read_count,base_count,fastq_ftp,fastq_md5,fastq_bytes,submitted_ftp,submitted_md5,submitted_bytes&format=tsv&download=true"
 PROFDGE_BASE_URL="https://raw.githubusercontent.com/bartongroup/profDGE48/${AUTHOR_COMMIT}"
 AUTHOR_MAPPING_URL="${PROFDGE_BASE_URL}/Preprocessed_data/ENAdata_ERP004763_sample_mapping.tsv"
 AUTHOR_BAD_REPS_URL="${PROFDGE_BASE_URL}/Bad_replicate_identification/exclude.lst"
@@ -93,6 +84,7 @@ ENA_REPORT_TSV="${METADATA_DIR}/ena_PRJEB5348_read_run.tsv"
 AUTHOR_MAPPING_TSV="${METADATA_DIR}/ENAdata_ERP004763_sample_mapping.tsv"
 AUTHOR_BAD_REPS="${METADATA_DIR}/exclude.lst"
 SOURCE_ACCESSIONS_TSV="${FASTQ_PKG}/source_accessions.tsv"
+SOURCE_DOWNLOADS_TSV="${FASTQ_PKG}/source_downloads.tsv"
 FASTQ_SAMPLES_TSV="${FASTQ_PKG}/samples.tsv"
 FASTQ_GENERATED_SAMPLES_TSV="${FASTQ_PKG}/generated_samples.tsv"
 FASTQ_METADATA_TSV="${FASTQ_PKG}/metadata.tsv"
@@ -261,6 +253,29 @@ tsv_unique_first_col() {
     awk 'NR > 1 && !seen[$1]++ { n++ } END { print n + 0 }' "$1"
 }
 
+tsv_has_columns() {
+    file="$1"
+    shift
+    [ -s "$file" ] || return 1
+    awk -v wanted="$*" '
+        BEGIN {
+            FS = "\t"
+            n = split(wanted, need, " ")
+        }
+        NR == 1 {
+            for (i = 1; i <= NF; i++) {
+                have[$i] = 1
+            }
+            for (i = 1; i <= n; i++) {
+                if (!(need[i] in have)) {
+                    exit 1
+                }
+            }
+            exit 0
+        }
+    ' "$file"
+}
+
 record_cmd() {
     printf '%s\n' "$*" >> "$COMMANDS_SH"
 }
@@ -357,7 +372,6 @@ write_versions() {
         printf 'sgd_reference_release\t%s\n' "$SGD_REFERENCE_RELEASE"
         printf 'sgd_reference_archive_date\t%s\n' "$SGD_REFERENCE_ARCHIVE_DATE"
         printf 'taf-seqkit\t2.13.0-r2\n'
-        printf 'taf-sra-tools\t3.4.1-r1\n'
         if command -v curl >/dev/null 2>&1; then
             printf 'curl\t%s\n' "$(curl --version | awk 'NR==1{print $1" "$2}')"
         else
@@ -391,6 +405,8 @@ Selected biological samples:
 
 FASTQ package:
   For each selected biological sample, all matching ENA lane FASTQ files are downloaded and md5-checked.
+  If an ENA fastq_ftp object fails size, gzip or md5 validation and a submitted_ftp object is available,
+  the flow falls back to the submitted FASTQ for the same run accession and records the actual source used.
   Lane FASTQs are merged per biological sample inside the output directory.
   SeqKit samples ${READS_PER_SAMPLE} reads with seed ${SEED}.
 
@@ -409,7 +425,7 @@ GO gene-set package:
   The Gene Ontology go-basic OBO file is used to assign GO term names and namespaces.
   The final GMT files keep the same systematic gene ID style as the count matrix and DE outputs.
   Root GO terms and Sequence Ontology terms are excluded from GMT construction.
-  This r1 package uses GO terms directly present in SGD GFF3 Ontology_term attributes;
+  This package uses GO terms directly present in SGD GFF3 Ontology_term attributes;
   it does not propagate annotations to GO ancestor terms.
   The background gene list is derived from the selected count matrix when it is available,
   excluding non-gene summary rows such as ambiguous or alignment_not_unique.
@@ -439,6 +455,8 @@ Planned packages:
    - ${READS_PER_SAMPLE} reads per biological sample.
    - Single-end FASTQ.
    - ENA lane FASTQs are merged by biological replicate before sampling.
+   - ENA fastq_ftp is used as the primary lane source; submitted_ftp is used
+     as a per-lane fallback when primary size/gzip/md5 validation fails.
 
 2. \`yeast-snf2-counts-medium-v1\`
    - Author-derived gene count files from the same project.
@@ -644,16 +662,50 @@ download_file() {
     log "  URL: ${url}"
     log "  -> ${dest}"
     record_cmd "curl -L --fail --retry 10 --retry-delay 10 --connect-timeout 30 --speed-time 120 --speed-limit 1024 -C - --progress-bar -o '$dest' '$url'"
-    curl -L --fail --retry 10 --retry-delay 10 --connect-timeout 30 --speed-time 120 --speed-limit 1024 $curl_retry_args $curl_continue_args --progress-bar -o "$tmp" "$url" 2>&1 < /dev/null
+    if curl -L --fail --retry 10 --retry-delay 10 --connect-timeout 30 --speed-time 120 --speed-limit 1024 $curl_retry_args $curl_continue_args --progress-bar -o "$tmp" "$url" 2>&1 < /dev/null; then
+        :
+    else
+        status=$?
+        log "Download failed for ${label}: curl exit ${status}"
+        return "$status"
+    fi
     mv "$tmp" "$dest"
     size="$(file_size_bytes "$dest")"
     log "Download complete: ${label} ($(format_bytes "$size"))"
+    if [ -n "$expected_bytes" ] && [ "$expected_bytes" != "." ] && [ "$size" != "$expected_bytes" ]; then
+        log "Downloaded ${label} has unexpected size: ${dest} ($(format_bytes "$size"), expected $(format_bytes "$expected_bytes"))"
+        return 23
+    fi
+}
+
+ena_report_has_r2_columns() {
+    tsv_has_columns "$ENA_REPORT_TSV" \
+        run_accession fastq_ftp fastq_md5 fastq_bytes submitted_ftp submitted_md5 submitted_bytes
+}
+
+source_accessions_has_r2_columns() {
+    tsv_has_columns "$SOURCE_ACCESSIONS_TSV" \
+        sample_id condition source_condition source_biol_rep selected_order lane run_accession \
+        fastq_url fastq_md5 fastq_bytes fallback_url fallback_md5 fallback_bytes fallback_kind
+}
+
+ensure_ena_report() {
+    if [ -s "$ENA_REPORT_TSV" ] && [ "$FORCE" != "true" ]; then
+        if ena_report_has_r2_columns; then
+            :
+        else
+            log "Existing ENA run table lacks r2 submitted_ftp fallback columns; redownload metadata: ${ENA_REPORT_TSV}"
+            rm -f "$ENA_REPORT_TSV" "${ENA_REPORT_TSV}.tmp"
+        fi
+    fi
+    download_file "$ENA_REPORT_URL" "$ENA_REPORT_TSV" "ENA run table"
+    ena_report_has_r2_columns || die "ENA run table is missing required r2 fallback columns: submitted_ftp/submitted_md5/submitted_bytes"
 }
 
 metadata_stage() {
     stage_begin "metadata"
     log "Download small project metadata and build selected source accession tables"
-    download_file "$ENA_REPORT_URL" "$ENA_REPORT_TSV" "ENA run table"
+    ensure_ena_report
     download_file "$AUTHOR_MAPPING_URL" "$AUTHOR_MAPPING_TSV" "author ENA mapping"
     download_file "$AUTHOR_BAD_REPS_URL" "$AUTHOR_BAD_REPS" "author bad replicate list"
     generate_source_accessions
@@ -684,7 +736,7 @@ generate_source_accessions() {
             for (i = 1; i <= NF; i++) {
                 h[$i] = i
             }
-            print "sample_id", "condition", "source_condition", "source_biol_rep", "selected_order", "lane", "run_accession", "fastq_url", "fastq_md5", "fastq_bytes"
+            print "sample_id", "condition", "source_condition", "source_biol_rep", "selected_order", "lane", "run_accession", "fastq_url", "fastq_md5", "fastq_bytes", "fallback_url", "fallback_md5", "fallback_bytes", "fallback_kind"
             next
         }
         FILENAME == ena && FNR > 1 {
@@ -696,16 +748,36 @@ generate_source_accessions() {
             url = $h["fastq_ftp"]
             md5 = $h["fastq_md5"]
             bytes = $h["fastq_bytes"]
+            fallback_url = $h["submitted_ftp"]
+            fallback_md5 = $h["submitted_md5"]
+            fallback_bytes = $h["submitted_bytes"]
             split(url, url_parts, ";")
             split(md5, md5_parts, ";")
             split(bytes, bytes_parts, ";")
+            split(fallback_url, fallback_url_parts, ";")
+            split(fallback_md5, fallback_md5_parts, ";")
+            split(fallback_bytes, fallback_bytes_parts, ";")
             url = url_parts[1]
             md5 = md5_parts[1]
             bytes = bytes_parts[1]
+            fallback_url = fallback_url_parts[1]
+            fallback_md5 = fallback_md5_parts[1]
+            fallback_bytes = fallback_bytes_parts[1]
             if (url !~ /^https?:\/\//) {
                 url = "https://" url
             }
-            print m[1], m[2], m[3], m[4], m[5], m[6], run, url, md5, bytes
+            fallback_kind = "."
+            if (fallback_url != "" && fallback_url != ".") {
+                if (fallback_url !~ /^https?:\/\//) {
+                    fallback_url = "https://" fallback_url
+                }
+                fallback_kind = "submitted_ftp"
+            } else {
+                fallback_url = "."
+                fallback_md5 = "."
+                fallback_bytes = "."
+            }
+            print m[1], m[2], m[3], m[4], m[5], m[6], run, url, md5, bytes, fallback_url, fallback_md5, fallback_bytes, fallback_kind
         }
     ' "$SELECTION_TSV" "$AUTHOR_MAPPING_TSV" "$ENA_REPORT_TSV" > "${SOURCE_ACCESSIONS_TSV}.tmp"
 
@@ -1262,7 +1334,7 @@ build_go_terms_table() {
             id = name = namespace = obsolete = ""
             next
         }
-        $0 ~ /^\[/ {
+        $0 ~ /^\\\\[/ {
             flush_term()
             in_term = 0
             id = name = namespace = obsolete = ""
@@ -1504,10 +1576,15 @@ EOF
 
 fastq_stage() {
     stage_begin "fastq"
-    log "Download ENA lane FASTQs, verify md5, merge lanes and sample reads"
+    log "Download ENA lane FASTQs, verify size/gzip/md5, merge lanes and sample reads"
     if [ ! -s "$SOURCE_ACCESSIONS_TSV" ]; then
         log "Source accession table is missing, running metadata stage first"
         metadata_stage
+    elif ! source_accessions_has_r2_columns && [ -s "$ENA_REPORT_TSV" ]; then
+        log "Source accession table lacks r2 fallback columns and ENA metadata is available; rebuilding metadata"
+        metadata_stage
+    elif ! source_accessions_has_r2_columns; then
+        log "Source accession table lacks r2 fallback columns; continue with primary-only sources"
     fi
 
     awk -v n="$LIMIT_SAMPLES" '
@@ -1527,6 +1604,9 @@ fastq_stage() {
 
     : > "$FASTQ_GENERATED_SAMPLES_TSV"
     printf 'sample_id\tread1\tcondition\tlibrary_layout\tsource_biological_replicate\n' > "$FASTQ_GENERATED_SAMPLES_TSV"
+    if [ "$FORCE" = "true" ] || [ ! -s "$SOURCE_DOWNLOADS_TSV" ]; then
+        printf 'sample_id\trun_accession\tprimary_url\tprimary_status\tactual_source_kind\tactual_url\texpected_md5\tactual_md5\texpected_bytes\tactual_bytes\tfallback_used\tmessage\n' > "$SOURCE_DOWNLOADS_TSV"
+    fi
 
     sample_index=0
     while IFS= read -r sample_id; do
@@ -1537,8 +1617,9 @@ fastq_stage() {
 
     if find "${FASTQ_PKG}/reads" -type f -name '*.fq.gz' | grep . >/dev/null 2>&1; then
         log "Build FASTQ statistics table: ${FASTQ_STATS_TSV}"
-        record_cmd "${SEQKIT_CMD} seqkit stats -T '${FASTQ_PKG}/reads/'*.fq.gz > '${FASTQ_STATS_TSV}'"
-        "$SEQKIT_CMD" seqkit stats -T "${FASTQ_PKG}/reads/"*.fq.gz > "$FASTQ_STATS_TSV"
+        record_cmd "taf-seqkit-v2.13.0-r2 seqkit stats -T '${FASTQ_PKG}/reads/'*.fq.gz > '${FASTQ_STATS_TSV}'"
+        export FASTQ_PKG FASTQ_STATS_TSV
+        [[taf: taf-seqkit-v2.13.0-r2 seqkit stats -T '"$FASTQ_PKG"'/reads/*.fq.gz ]] > "$FASTQ_STATS_TSV"
     fi
     log "FASTQ files generated: $(find "${FASTQ_PKG}/reads" -type f -name '*.fq.gz' | wc -l | awk '{print $1}')"
     stage_done "fastq"
@@ -1554,6 +1635,195 @@ append_generated_fastq_sample() {
             exit
         }
     ' "$SOURCE_ACCESSIONS_TSV" >> "$FASTQ_GENERATED_SAMPLES_TSV"
+}
+
+sanitize_tsv_field() {
+    printf '%s' "$1" | tr '\t\r\n' '   '
+}
+
+append_source_download() {
+    sample_id="$1"
+    run_accession="$2"
+    primary_url="$3"
+    primary_status="$4"
+    actual_source_kind="$5"
+    actual_url="$6"
+    expected_md5="$7"
+    actual_md5="$8"
+    expected_bytes="$9"
+    actual_bytes="${10}"
+    fallback_used="${11}"
+    message="${12}"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$(sanitize_tsv_field "$sample_id")" \
+        "$(sanitize_tsv_field "$run_accession")" \
+        "$(sanitize_tsv_field "$primary_url")" \
+        "$(sanitize_tsv_field "$primary_status")" \
+        "$(sanitize_tsv_field "$actual_source_kind")" \
+        "$(sanitize_tsv_field "$actual_url")" \
+        "$(sanitize_tsv_field "$expected_md5")" \
+        "$(sanitize_tsv_field "$actual_md5")" \
+        "$(sanitize_tsv_field "$expected_bytes")" \
+        "$(sanitize_tsv_field "$actual_bytes")" \
+        "$(sanitize_tsv_field "$fallback_used")" \
+        "$(sanitize_tsv_field "$message")" >> "$SOURCE_DOWNLOADS_TSV"
+}
+
+VERIFY_LANE_MESSAGE=""
+VERIFY_LANE_MD5="."
+VERIFY_LANE_BYTES="0"
+
+verify_fastq_lane() {
+    file="$1"
+    expected_md5="$2"
+    expected_bytes="$3"
+    run_accession="$4"
+
+    VERIFY_LANE_MD5="."
+    VERIFY_LANE_BYTES="$(file_size_bytes "$file")"
+    VERIFY_LANE_MESSAGE=""
+
+    if [ -n "$expected_bytes" ] && [ "$expected_bytes" != "." ] && [ "$VERIFY_LANE_BYTES" != "$expected_bytes" ]; then
+        VERIFY_LANE_MESSAGE="size mismatch for ${run_accession}: expected ${expected_bytes}, got ${VERIFY_LANE_BYTES}"
+        return 1
+    fi
+
+    if gzip -t "$file" >/dev/null 2>&1; then
+        :
+    else
+        VERIFY_LANE_MESSAGE="gzip validation failed for ${run_accession}"
+        return 1
+    fi
+
+    if [ -n "$expected_md5" ] && [ "$expected_md5" != "." ]; then
+        VERIFY_LANE_MD5="$(md5_file "$file")"
+        if [ "$VERIFY_LANE_MD5" != "$expected_md5" ]; then
+            VERIFY_LANE_MESSAGE="md5 mismatch for ${run_accession}: expected ${expected_md5}, got ${VERIFY_LANE_MD5}"
+            return 1
+        fi
+    fi
+
+    VERIFY_LANE_MESSAGE="ok"
+    return 0
+}
+
+SOURCE_TRY_MESSAGE=""
+SOURCE_TRY_MD5="."
+SOURCE_TRY_BYTES="0"
+
+try_lane_source() {
+    source_kind="$1"
+    url="$2"
+    expected_md5="$3"
+    expected_bytes="$4"
+    dest="$5"
+    run_accession="$6"
+    allow_redownload="$7"
+
+    SOURCE_TRY_MESSAGE=""
+    SOURCE_TRY_MD5="."
+    SOURCE_TRY_BYTES="0"
+
+    if download_file "$url" "$dest" "FASTQ ${run_accession} (${source_kind})" "$expected_bytes"; then
+        :
+    else
+        SOURCE_TRY_MESSAGE="download or size check failed for ${run_accession} from ${source_kind}"
+        SOURCE_TRY_BYTES="$(file_size_bytes "$dest")"
+        SOURCE_TRY_MD5="."
+        rm -f "${dest}.tmp"
+        if [ "$allow_redownload" != "true" ] || [ "$FORCE" = "true" ]; then
+            return 1
+        fi
+        log "FASTQ source failed for ${run_accession} from ${source_kind}; redownload once"
+        rm -f "$dest" "${dest}.tmp"
+        if download_file "$url" "$dest" "FASTQ ${run_accession} (${source_kind})" "$expected_bytes"; then
+            :
+        else
+            SOURCE_TRY_MESSAGE="download or size check failed for ${run_accession} from ${source_kind} after redownload"
+            SOURCE_TRY_BYTES="$(file_size_bytes "$dest")"
+            SOURCE_TRY_MD5="."
+            rm -f "${dest}.tmp"
+            return 1
+        fi
+    fi
+
+    if verify_fastq_lane "$dest" "$expected_md5" "$expected_bytes" "$run_accession"; then
+        SOURCE_TRY_MESSAGE="ok"
+        SOURCE_TRY_MD5="$VERIFY_LANE_MD5"
+        SOURCE_TRY_BYTES="$VERIFY_LANE_BYTES"
+        return 0
+    fi
+
+    SOURCE_TRY_MESSAGE="$VERIFY_LANE_MESSAGE"
+    SOURCE_TRY_MD5="$VERIFY_LANE_MD5"
+    SOURCE_TRY_BYTES="$VERIFY_LANE_BYTES"
+    if [ "$allow_redownload" != "true" ] || [ "$FORCE" = "true" ]; then
+        return 1
+    fi
+
+    log "FASTQ verification failed for ${run_accession} from ${source_kind}; remove cached file and redownload once: ${SOURCE_TRY_MESSAGE}"
+    rm -f "$dest" "${dest}.tmp"
+    if download_file "$url" "$dest" "FASTQ ${run_accession} (${source_kind})" "$expected_bytes"; then
+        :
+    else
+        SOURCE_TRY_MESSAGE="download or size check failed for ${run_accession} from ${source_kind} after redownload"
+        SOURCE_TRY_BYTES="$(file_size_bytes "$dest")"
+        SOURCE_TRY_MD5="."
+        return 1
+    fi
+
+    if verify_fastq_lane "$dest" "$expected_md5" "$expected_bytes" "$run_accession"; then
+        SOURCE_TRY_MESSAGE="ok"
+        SOURCE_TRY_MD5="$VERIFY_LANE_MD5"
+        SOURCE_TRY_BYTES="$VERIFY_LANE_BYTES"
+        return 0
+    fi
+
+    SOURCE_TRY_MESSAGE="$VERIFY_LANE_MESSAGE"
+    SOURCE_TRY_MD5="$VERIFY_LANE_MD5"
+    SOURCE_TRY_BYTES="$VERIFY_LANE_BYTES"
+    return 1
+}
+
+download_fastq_lane_with_fallback() {
+    sample_id="$1"
+    run_accession="$2"
+    fastq_url="$3"
+    fastq_md5="$4"
+    fastq_bytes="$5"
+    fallback_url="$6"
+    fallback_md5="$7"
+    fallback_bytes="$8"
+    fallback_kind="$9"
+    lane_fastq="${10}"
+
+    primary_status="failed"
+    primary_message=""
+    if try_lane_source "fastq_ftp" "$fastq_url" "$fastq_md5" "$fastq_bytes" "$lane_fastq" "$run_accession" "true"; then
+        log "FASTQ source OK for ${run_accession}: fastq_ftp"
+        append_source_download "$sample_id" "$run_accession" "$fastq_url" "ok" "fastq_ftp" "$fastq_url" "$fastq_md5" "$SOURCE_TRY_MD5" "$fastq_bytes" "$SOURCE_TRY_BYTES" "false" "ok"
+        return 0
+    fi
+
+    primary_message="$SOURCE_TRY_MESSAGE"
+    primary_status="failed: ${primary_message}"
+    log "Primary FASTQ source failed for ${run_accession}: ${primary_message}"
+    rm -f "$lane_fastq" "${lane_fastq}.tmp"
+
+    if [ -n "$fallback_url" ] && [ "$fallback_url" != "." ] && [ "$fallback_kind" != "." ]; then
+        log "Fallback to ${fallback_kind} for ${run_accession}: ${fallback_url}"
+        if try_lane_source "$fallback_kind" "$fallback_url" "$fallback_md5" "$fallback_bytes" "$lane_fastq" "$run_accession" "true"; then
+            log "Fallback FASTQ source succeeded for ${run_accession}: ${fallback_kind}"
+            append_source_download "$sample_id" "$run_accession" "$fastq_url" "$primary_status" "$fallback_kind" "$fallback_url" "$fallback_md5" "$SOURCE_TRY_MD5" "$fallback_bytes" "$SOURCE_TRY_BYTES" "true" "primary failed; fallback succeeded"
+            return 0
+        fi
+        fallback_message="$SOURCE_TRY_MESSAGE"
+        append_source_download "$sample_id" "$run_accession" "$fastq_url" "$primary_status" "$fallback_kind" "$fallback_url" "$fallback_md5" "$SOURCE_TRY_MD5" "$fallback_bytes" "$SOURCE_TRY_BYTES" "true" "fallback failed: ${fallback_message}"
+        die "FASTQ download failed for ${run_accession}: primary failed (${primary_message}); fallback failed (${fallback_message})"
+    fi
+
+    append_source_download "$sample_id" "$run_accession" "$fastq_url" "$primary_status" "." "." "$fastq_md5" "$SOURCE_TRY_MD5" "$fastq_bytes" "$SOURCE_TRY_BYTES" "false" "no fallback source available"
+    die "FASTQ download failed for ${run_accession}: ${primary_message}; no fallback source available"
 }
 
 process_fastq_sample() {
@@ -1586,24 +1856,15 @@ process_fastq_sample() {
     mkdir -p "$sample_dir" "$merged_dir"
 
     lane_index=0
-    while IFS="$(printf '\t')" read -r sid condition source_condition source_biol_rep selected_order lane run_accession fastq_url fastq_md5 fastq_bytes; do
+    while IFS="$(printf '\t')" read -r sid condition source_condition source_biol_rep selected_order lane run_accession fastq_url fastq_md5 fastq_bytes fallback_url fallback_md5 fallback_bytes fallback_kind extra; do
         lane_index=$((lane_index + 1))
         lane_fastq="${sample_dir}/${run_accession}.fastq.gz"
+        fallback_url="${fallback_url:-.}"
+        fallback_md5="${fallback_md5:-.}"
+        fallback_bytes="${fallback_bytes:-.}"
+        fallback_kind="${fallback_kind:-.}"
         log "Lane ${lane_index}/${lane_count} for ${sample_id}: ${run_accession}"
-        download_file "$fastq_url" "$lane_fastq" "FASTQ ${run_accession}" "$fastq_bytes"
-        if [ -n "$fastq_md5" ] && [ "$fastq_md5" != "." ]; then
-            log "Verify md5 for ${run_accession}"
-            actual_md5="$(md5_file "$lane_fastq")"
-            if [ "$actual_md5" != "$fastq_md5" ] && [ "$FORCE" != "true" ]; then
-                log "md5 mismatch for ${run_accession}, remove cached file and redownload once: expected ${fastq_md5}, got ${actual_md5}"
-                rm -f "$lane_fastq" "${lane_fastq}.tmp"
-                download_file "$fastq_url" "$lane_fastq" "FASTQ ${run_accession}" "$fastq_bytes"
-                log "Verify md5 for ${run_accession} after redownload"
-                actual_md5="$(md5_file "$lane_fastq")"
-            fi
-            [ "$actual_md5" = "$fastq_md5" ] || die "md5 mismatch for ${run_accession}: expected ${fastq_md5}, got ${actual_md5}"
-            log "md5 OK: ${run_accession}"
-        fi
+        download_fastq_lane_with_fallback "$sample_id" "$run_accession" "$fastq_url" "$fastq_md5" "$fastq_bytes" "$fallback_url" "$fallback_md5" "$fallback_bytes" "$fallback_kind" "$lane_fastq"
     done < "$lane_table"
 
     merged_fastq="${merged_dir}/${sample_id}.merged.fq.gz"
@@ -1632,10 +1893,11 @@ process_fastq_sample() {
 
     if [ "$need_sample" = "true" ]; then
         log "Sample ${READS_PER_SAMPLE} reads for ${sample_id} with SeqKit seed ${SEED}"
-        record_cmd "${SEQKIT_CMD} seqkit sample -2 -s '${SEED}' -n '${READS_PER_SAMPLE}' -o '${out_fastq}' '${merged_fastq}'"
+        record_cmd "taf-seqkit-v2.13.0-r2 seqkit sample -2 -s '${SEED}' -n '${READS_PER_SAMPLE}' -o '${out_fastq}' '${merged_fastq}'"
         sample_tmp="${out_fastq}.tmp.fq.gz"
         rm -f "$sample_tmp"
-        "$SEQKIT_CMD" seqkit sample -2 -s "$SEED" -n "$READS_PER_SAMPLE" -o "$sample_tmp" "$merged_fastq"
+        export SEED READS_PER_SAMPLE sample_tmp merged_fastq
+        [[taf: taf-seqkit-v2.13.0-r2 seqkit sample -2 -s '"$SEED"' -n '"$READS_PER_SAMPLE"' -o '"$sample_tmp"' '"$merged_fastq"' ]] </dev/null
         mv "$sample_tmp" "$out_fastq"
         log "Check gzip integrity for ${out_fastq}"
         gzip -t "$out_fastq" || die "Sampled FASTQ gzip check failed: ${out_fastq}"

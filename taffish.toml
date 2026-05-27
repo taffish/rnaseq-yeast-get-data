@@ -2,7 +2,7 @@
 name = "rnaseq-yeast-get-data"
 kind = "flow"
 version = "0.1.0"
-release = 1
+release = 2
 license = "Apache-2.0"
 main = "src/main.taf"
 
@@ -32,4 +32,3 @@ description = "Public yeast WT versus snf2 knockout RNA-seq dataset with author-
 
 [dependencies]
 taf-seqkit = "2.13.0-r2"
-taf-sra-tools = "3.4.1-r1"

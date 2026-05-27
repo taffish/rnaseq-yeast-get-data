@@ -23,6 +23,7 @@ grep -q 'yeast-reference-sgd-r64.4.1-v1' "$OUTDIR/04_reports/download-plan.md"
 grep -q 'reference_package' "$OUTDIR/run.manifest.json"
 
 find "$OUTDIR" -name '*.fq.gz' | grep . && exit 1
+"$APP_ROOT/tests/offline-fastq-smoke.sh"
 "$APP_ROOT/tests/offline-reference-smoke.sh"
 "$APP_ROOT/tests/offline-genesets-smoke.sh"
 exit 0

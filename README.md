@@ -5,7 +5,7 @@
 - source project: ENA / BioProject `PRJEB5348`
 - biology: *Saccharomyces cerevisiae* WT vs `snf2` knockout
 - selected design: 12 WT + 12 `snf2_KO` biological samples
-- FASTQ target: 500k single-end reads per biological sample
+- FASTQ target: 500k single-end reads per biological sample, with per-lane ENA `submitted_ftp` fallback when the primary `fastq_ftp` object fails validation
 - count target: author-derived 12-vs-12 gene count matrix
 - reference target: SGD S288C `R64.4.1` chr-style genome FASTA and feature-only gene annotation GFF3
 - gene-set target: SGD GO-derived GMT files and count-matrix background genes for enrichment tests
@@ -30,9 +30,9 @@ or author-count resources during normal analysis runtime.
 - name: `rnaseq-yeast-get-data`
 - command: `taf-rnaseq-yeast-get-data`
 - kind: `flow`
-- TAFFISH version: `0.1.0-r1`
+- TAFFISH version: `0.1.0-r2`
 - upstream dataset: `PRJEB5348` plus `bartongroup/profDGE48` commit `375dc0d57d9d1fa96a4245a6530e0fda34305891`; SGD S288C reference genome `R64.4.1`
-- dependencies: `taf-seqkit 2.13.0-r2`, `taf-sra-tools 3.4.1-r1`
+- dependencies: `taf-seqkit 2.13.0-r2`
 
 ## Acquisition Plan
 
@@ -43,7 +43,7 @@ The flow is deliberately staged so we can review the plan before pulling data:
 3. `counts`: download the author WT/Snf2 count tarballs, unpack them, map files to the selected biological replicates and build `gene_counts_12v12.tsv`.
 4. `reference`: download the SGD S288C `R64.4.1` reference tarball, validate it, extract an uncompressed feature-only gene annotation GFF3, then derive the genome FASTA from the GFF3 embedded FASTA block so sequence IDs match the annotation.
 5. `genesets`: build GO-derived GMT files from the SGD annotation and Gene Ontology `go-basic.obo`, plus a background gene list from the selected count matrix.
-6. `fastq`: download selected ENA lane FASTQs, verify ENA md5 values, merge lanes per biological replicate, then sample reads with SeqKit.
+6. `fastq`: download selected ENA lane FASTQs, verify ENA size/gzip/md5 values, fall back to `submitted_ftp` when the primary `fastq_ftp` object fails validation, merge lanes per biological replicate, then sample reads with SeqKit.
 7. `all`: run `metadata`, `counts`, `reference`, `genesets` and `fastq`.
 
 The selected biological replicates are spread across the 1-48 replicate range and avoid the author-listed bad replicates:
@@ -110,7 +110,7 @@ Full preparation:
 
 For long local data acquisition, prefer `./scripts/run-streaming.sh` in this app directory. It compiles `src/main.taf` to a temporary shell script and runs that shell script directly, so stdout/stderr are streamed immediately. Current `taf run` may buffer child output until the process exits in some local TAFFISH builds, which is uncomfortable for multi-hour downloads.
 
-`--resume true` is the normal way to continue in the same output directory. For example, after `plan`, continue with `metadata`; after `metadata`, continue with `counts` or `fastq`; after a `--limit-samples 1` trial, continue the remaining FASTQ samples in the same directory. Existing final sample FASTQs are reused after gzip checks, and existing lane FASTQs are reused only when size/md5 checks pass.
+`--resume true` is the normal way to continue in the same output directory. For example, after `plan`, continue with `metadata`; after `metadata`, continue with `counts` or `fastq`; after a `--limit-samples 1` trial, continue the remaining FASTQ samples in the same directory. Existing final sample FASTQs are reused after gzip checks, and existing lane FASTQs are reused only when size/gzip/md5 checks pass. If an r1 ENA run table is present without `submitted_ftp` fallback columns, r2 automatically refreshes metadata before rebuilding the source accession table.
 
 Use `--force true` only when you intentionally want to redownload or overwrite existing files inside the same `<outdir>`. It does not delete `<outdir>`.
 
@@ -138,6 +138,7 @@ All generated content is written under `<outdir>/`:
       generated_samples.tsv
       metadata.tsv
       source_accessions.tsv
+      source_downloads.tsv
       reads/
       expected/
     yeast-snf2-counts-medium-v1/
@@ -201,7 +202,6 @@ Formal tests skip cleanly when this tree or a required package is missing.
 Core biological processing is version-pinned through TAFFISH dependencies:
 
 - `taf-seqkit 2.13.0-r2`: FASTQ sampling and FASTQ statistics
-- `taf-sra-tools 3.4.1-r1`: retained as an explicit dataset-access dependency and fallback/provenance anchor
 
 Generic host utilities are used for transport and tabular glue: `curl`, `tar`, `gzip`, `awk`, `sort`, `find`, `md5`/`md5sum`, and `sha256sum`/`shasum`. This is intentional for this maintainer data-preparation flow; these are not hidden bioinformatics tools.
 
@@ -219,11 +219,11 @@ from the feature-only SGD GFF3, assigns GO namespaces and names from the OBO
 file, writes BP/MF/CC/all GMT files, and creates a background gene list from
 `gene_counts_12v12.tsv` after removing non-gene summary rows such as
 `ambiguous` and `alignment_not_unique`. The resulting gene IDs are yeast
-systematic IDs, matching the DE flow outputs. This r1 package uses GO terms
+systematic IDs, matching the DE flow outputs. This package uses GO terms
 directly present in SGD GFF3 `Ontology_term` attributes and does not propagate
 annotations to GO ancestor terms.
 
-During real acquisition, the main flow prints progress-oriented status messages to stdout and appends them to `<outdir>/01_logs/flow.log`. Each stage reports what it is doing. FASTQ sample processing additionally reports sample index, lane count, ENA run accession, expected size when available, target path and curl progress bar, then md5 verification, merge, sampling and cleanup status.
+During real acquisition, the main flow prints progress-oriented status messages to stdout and appends them to `<outdir>/01_logs/flow.log`. Each stage reports what it is doing. FASTQ sample processing additionally reports sample index, lane count, ENA run accession, expected size when available, target path and curl progress bar, then size/gzip/md5 verification, primary-source failure messages, fallback-source use, merge, sampling and cleanup status. The FASTQ package writes `source_downloads.tsv` to record the actual source used for each processed lane.
 
 There can be a short silent interval before the first flow log line while TAFFISH prepares dependency wrappers or container commands. Once the main shell flow starts, status messages are emitted immediately.
 
@@ -236,7 +236,7 @@ Recommended local resources for the full run:
 
 Use `--limit-samples 1` first to test network behavior and ENA access from the current machine.
 
-If an ENA HTTPS transfer fails with a transient curl/TLS error, rerun with `--resume true`. The flow keeps partial `.tmp` downloads and resumes them with curl `-C -` when possible. Completed lane FASTQs are size/md5-checked and reused; corrupt cached lane files are removed and downloaded once more.
+If an ENA HTTPS transfer fails with a transient curl/TLS error, rerun with `--resume true`. The flow keeps partial `.tmp` downloads and resumes them with curl `-C -` when possible. Completed lane FASTQs are size/gzip/md5-checked and reused; corrupt cached lane files are removed and downloaded once more. If the primary ENA `fastq_ftp` object itself is invalid or inconsistent with ENA metadata, r2 tries the same run accession's `submitted_ftp` object when ENA provides one, then records `fallback_used=true` in `source_downloads.tsv`.
 
 ## Boundaries
 

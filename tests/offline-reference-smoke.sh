@@ -20,11 +20,31 @@ cat > "$BIN_DIR/taf-seqkit-v2.13.0-r2" <<'EOF'
 #!/bin/sh
 set -eu
 
+sq() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+emit_compiled() {
+    self="$(command -v taf-seqkit-v2.13.0-r2)"
+    printf '#!/bin/sh\n'
+    printf 'set -eu\n'
+    printf '%s' "$(sq "$self")"
+    for arg in "$@"; do
+        case "$arg" in
+            *'$'*|*'"'*|*'*'*)
+                printf ' %s' "$arg"
+                ;;
+            *)
+                printf ' %s' "$(sq "$arg")"
+                ;;
+        esac
+    done
+    printf '\n'
+}
+
 if [ "${1:-}" = "--compile" ]; then
-    cat <<'EOS'
-#!/bin/sh
-exit 0
-EOS
+    shift
+    emit_compiled "$@"
     exit 0
 fi
 
@@ -33,26 +53,6 @@ fi
 printf '%s\n' 'seqkit v2.13.0'
 EOF
 chmod +x "$BIN_DIR/taf-seqkit-v2.13.0-r2"
-
-cat > "$BIN_DIR/taf-sra-tools-v3.4.1-r1" <<'EOF'
-#!/bin/sh
-set -eu
-
-if [ "${1:-}" = "--compile" ]; then
-    cat <<'EOS'
-#!/bin/sh
-exit 0
-EOS
-    exit 0
-fi
-
-if [ "${1:-}" = "sra-info" ]; then
-    printf '%s\n' 'sra-tools 3.4.1'
-    exit 0
-fi
-exit 2
-EOF
-chmod +x "$BIN_DIR/taf-sra-tools-v3.4.1-r1"
 
 {
     printf '%s\n' '>ref|NC_001133| synthetic raw RefSeq-style chromosome I'

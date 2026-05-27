@@ -4,6 +4,7 @@ set -eu
 APP_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TMP_BASE="${TMPDIR:-/tmp}"
 RUN_DIR="$(mktemp -d "${TMP_BASE%/}/rnaseq-yeast-genesets-smoke.XXXXXX")"
+BIN_DIR="$RUN_DIR/bin"
 
 cleanup() {
     rm -rf "$RUN_DIR"
@@ -16,9 +17,48 @@ COUNT_PKG="$OUTDIR/03_results/yeast-snf2-counts-medium-v1"
 GENESETS_PKG="$OUTDIR/03_results/yeast-sgd-go-gene-sets-r64.4.1-v1"
 
 mkdir -p \
+    "$BIN_DIR" \
     "$REF_PKG/reference/annotation" \
     "$COUNT_PKG/counts" \
     "$GENESETS_PKG/source"
+
+cat > "$BIN_DIR/taf-seqkit-v2.13.0-r2" <<'EOF'
+#!/bin/sh
+set -eu
+
+sq() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+emit_compiled() {
+    self="$(command -v taf-seqkit-v2.13.0-r2)"
+    printf '#!/bin/sh\n'
+    printf 'set -eu\n'
+    printf '%s' "$(sq "$self")"
+    for arg in "$@"; do
+        case "$arg" in
+            *'$'*|*'"'*|*'*'*)
+                printf ' %s' "$arg"
+                ;;
+            *)
+                printf ' %s' "$(sq "$arg")"
+                ;;
+        esac
+    done
+    printf '\n'
+}
+
+if [ "${1:-}" = "--compile" ]; then
+    shift
+    emit_compiled "$@"
+    exit 0
+fi
+
+[ "${1:-}" = "seqkit" ] || exit 2
+[ "${2:-}" = "version" ] || exit 2
+printf '%s\n' 'seqkit v2.13.0'
+EOF
+chmod +x "$BIN_DIR/taf-seqkit-v2.13.0-r2"
 
 cat > "$REF_PKG/reference/annotation/yeast_s288c_gene_annotation_R64-4-1.gff3" <<'EOF'
 ##gff-version 3
@@ -61,7 +101,7 @@ namespace: biological_process
 is_obsolete: true
 EOF
 
-"$APP_ROOT/scripts/run-streaming.sh" \
+PATH="$BIN_DIR:$PATH" "$APP_ROOT/scripts/run-streaming.sh" \
     --outdir "$OUTDIR" \
     --stage genesets \
     --resume true
