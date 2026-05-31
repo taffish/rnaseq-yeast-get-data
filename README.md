@@ -34,6 +34,25 @@ or author-count resources during normal analysis runtime.
 - upstream dataset: `PRJEB5348` plus `bartongroup/profDGE48` commit `375dc0d57d9d1fa96a4245a6530e0fda34305891`; SGD S288C reference genome `R64.4.1`
 - dependencies: `taf-seqkit 2.13.0-r2`
 
+## Data Sources, Licenses and Citation
+
+This repository is the canonical TAFFISH provenance record for the yeast SNF2
+example data used by the RNA-seq flow family. The generated files are
+demonstration and validation artifacts derived from public biological resources;
+users should cite the original study and follow the current terms of the source
+databases when reusing the data or reports.
+
+| Component | Used for | Source | Version, accession or commit | Attribution and terms |
+| --- | --- | --- | --- | --- |
+| Raw RNA-seq reads and run metadata | Lane FASTQs, sample table, FASTQ-derived reference and de novo example reports | ENA / NCBI BioProject [`PRJEB5348`](https://www.ebi.ac.uk/ena/browser/view/PRJEB5348) | Highly Replicated Yeast RNAseq, WT vs `snf2` knockout | Cite the accession and the original study: Gierlinski et al. 2015, Bioinformatics, DOI [`10.1093/bioinformatics/btv425`](https://doi.org/10.1093/bioinformatics/btv425). Follow ENA/EMBL-EBI and NCBI public data usage terms. |
+| Author metadata and count files | ENA sample mapping, excluded-replicate list, selected WT/Snf2 count matrix | [`bartongroup/profDGE48`](https://github.com/bartongroup/profDGE48) | Commit `375dc0d57d9d1fa96a4245a6530e0fda34305891` | Cite the upstream repository/commit together with the associated yeast RNA-seq study. Check the upstream repository for current licensing and reuse notes before redistribution. |
+| Reference genome and annotation | Reference-mode genome FASTA and feature-only GFF3 for index construction and formal tests | Saccharomyces Genome Database archive | S288C `R64.4.1`, archive tarball `S288C_reference_genome_R64-4-1_20230830.tgz` | Attribute SGD / yeastgenome.org. SGD materials are distributed under Creative Commons Attribution 4.0 according to SGD documentation and publications. |
+| Gene Ontology terms | GO names, namespaces and term metadata used while building GMT files | Gene Ontology [`go-basic.obo`](https://current.geneontology.org/ontology/go-basic.obo) | Current OBO snapshot downloaded at preparation time | Attribute the Gene Ontology Consortium and follow current GO resource terms. The generated GMTs combine GO terms with SGD annotation-derived gene-to-GO mappings. |
+| TAFFISH generated derivatives | Sampled FASTQs, selected count matrix, reference package, GO-derived GMT/background, checksums and reports | This flow output | Recorded in `run.manifest.json`, `source_urls.tsv`, `source_downloads.tsv`, `checksums.tsv` and package manifests | Treat these as reproducible demonstration artifacts. Keep the provenance files with any redistributed copy and cite the upstream biological sources above. |
+
+The public RNA-seq flow portal summarizes these same sources for readers of the
+example reports: <https://taffish.github.io/rnaseq-flows/docs/data-sources.html>.
+
 ## Acquisition Plan
 
 The flow is deliberately staged so we can review the plan before pulling data:
