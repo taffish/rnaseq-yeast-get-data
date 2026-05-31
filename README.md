@@ -53,7 +53,7 @@ databases when reusing the data or reports.
 The public RNA-seq flow portal summarizes these same sources for readers of the
 example reports: <https://taffish.github.io/rnaseq-flows/docs/data-sources.html>.
 
-## Acquisition Plan
+## Data Acquisition and Preparation Plan
 
 The flow is deliberately staged so we can review the plan before pulling data:
 
